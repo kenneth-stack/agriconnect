@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: agriconnect-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CLIENT_ORIGIN        # set to your frontend URL after first deploy
+        sync: false
+      - key: ANTHROPIC_API_KEY    # optional: leave empty and the AI page shows 'coming soon'
+        sync: false
+  - type: web
+    name: agriconnect-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_URL         # set to your API URL, no trailing slash
+        sync: false
