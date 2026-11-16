@@ -1,55 +1,51 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, naira } from '../api.js';
 
 export default function Investment({ user }) {
   const [projects, setProjects] = useState([]);
   const [amounts, setAmounts] = useState({});
-  const [form, setForm] = useState({ title: '', crop: '', state: '', description: '', amount_needed: '' });
-  const [msg, setMsg] = useState('');
-  const load = () => api('/projects').then(setProjects).catch((e) => setMsg(e.message));
+  const [form, setForm] = useState({ title: '', crop: '', description: '', amount_needed: '' });
+  const [msg, setMsg] = useState(null);
+  const load = () => api('/projects').then(setProjects).catch((e) => setMsg({ err: e.message }));
   useEffect(() => { load(); }, []);
 
-  async function invest(id) {
-    try { await api(`/projects/${id}/invest`, { method: 'POST', body: { amount: amounts[id] } }); setMsg('Investment recorded.'); load(); }
-    catch (e) { setMsg(e.message); }
-  }
-  async function create(e) {
-    e.preventDefault();
-    try { await api('/projects', { method: 'POST', body: form }); setMsg('Funding request published.'); load(); }
-    catch (e2) { setMsg(e2.message); }
-  }
+  const act = async (fn, ok) => { try { await fn(); setMsg({ ok }); load(); } catch (e) { setMsg({ err: e.message }); } };
 
   return (
     <>
       <h2>Fund a farm, share the harvest</h2>
-      <p className="muted">Illustrative profit split: 45% investor, 40% farmer, 15% platform. Final terms depend on crop, risk and insurance.</p>
-      {msg && <p role="status">{msg}</p>}
+      <p className="muted">Farmers ask for funding for a season; investors fund part or all of it. Profit-sharing terms are agreed per project.</p>
+      {msg?.ok && <p className="ok" role="status">{msg.ok}</p>}{msg?.err && <p className="error" role="alert">{msg.err}</p>}
       <div className="grid">
         {projects.map((p) => {
           const pct = Math.round((p.amount_funded / p.amount_needed) * 100);
           return (
             <article key={p.id} className="card">
               <h3>{p.title}</h3>
-              <p>{p.crop}, {p.state}, by {p.farmer}</p>
+              <p><Link to={`/farmers/${p.farmer_id}`}>{p.farmer}</Link> · {p.state} {p.crop && `· ${p.crop}`}</p>
+              {p.description && <p className="muted">{p.description}</p>}
               <progress value={pct} max="100" aria-label="Funded" />
-              <p>{naira(p.amount_funded)} of {naira(p.amount_needed)} funded ({pct}%)</p>
+              <p>{naira(p.amount_funded)} of {naira(p.amount_needed)} ({pct}%) · {p.investors} investor(s)</p>
               {user?.role === 'investor' && (
                 <div className="row">
-                  <input type="number" placeholder="Amount in ₦" onChange={(e) => setAmounts({ ...amounts, [p.id]: e.target.value })} />
-                  <button className="btn" onClick={() => invest(p.id)}>Invest</button>
+                  <input type="number" min="1" placeholder="Amount in ₦" onChange={(e) => setAmounts({ ...amounts, [p.id]: e.target.value })} />
+                  <button className="btn" onClick={() => act(() => api(`/projects/${p.id}/invest`, { method: 'POST', body: { amount: amounts[p.id] } }), 'Investment recorded. See it in your history.')}>Invest</button>
                 </div>
               )}
             </article>
           );
         })}
-        {!projects.length && <p className="muted">No open farms right now.</p>}
       </div>
+      {!projects.length && <p className="muted">No farms are asking for funding right now.</p>}
+      {!user && <p><Link className="btn" to="/login?role=investor">Register as an investor</Link></p>}
       {user?.role === 'farmer' && (
-        <form className="card" onSubmit={create}>
+        <form className="card" onSubmit={(e) => { e.preventDefault(); act(() => api('/projects', { method: 'POST', body: form }), 'Funding request published.'); }}>
           <h3>Ask for funding</h3>
-          {['title', 'crop', 'state', 'description', 'amount_needed'].map((k) => (
-            <label key={k}>{k.replace('_', ' ')}<input value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} required={k === 'title' || k === 'amount_needed'} /></label>
-          ))}
+          <label>Title<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></label>
+          <label>Crop<input value={form.crop} onChange={(e) => setForm({ ...form, crop: e.target.value })} /></label>
+          <label>Details<textarea rows="3" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
+          <label>Amount needed (₦)<input type="number" min="1" value={form.amount_needed} onChange={(e) => setForm({ ...form, amount_needed: e.target.value })} required /></label>
           <button className="btn">Publish request</button>
         </form>
       )}

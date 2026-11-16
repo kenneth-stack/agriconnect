@@ -1,3 +1,8 @@
+databases:
+  - name: agriconnect-db
+    databaseName: agriconnect
+    plan: free            # if Render rejects this plan name, pick a paid Postgres plan in the dashboard
+
 services:
   - type: web
     name: agriconnect-api
@@ -6,13 +11,33 @@ services:
     buildCommand: npm install
     startCommand: npm start
     plan: free
+    healthCheckPath: /health
     envVars:
-      - key: JWT_SECRET
+      - key: DATABASE_URL            # connected automatically to the database above
+        fromDatabase:
+          name: agriconnect-db
+          property: connectionString
+      - key: JWT_SECRET              # generated for you
         generateValue: true
-      - key: CLIENT_ORIGIN        # set to your frontend URL after first deploy
+      - key: CLIENT_ORIGIN           # set to your frontend URL after first deploy
         sync: false
-      - key: ANTHROPIC_API_KEY    # optional: leave empty and the AI page shows 'coming soon'
+      - key: ADMIN_EMAIL             # your admin login (created on first start)
         sync: false
+      - key: ADMIN_PASSWORD          # choose a strong password
+        sync: false
+      - key: ANTHROPIC_API_KEY       # optional: leave empty and the AI page shows 'coming soon'
+        sync: false
+      - key: R2_ACCOUNT_ID           # Cloudflare R2 photo storage (all optional; empty = photos kept in Postgres)
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_PUBLIC_URL
+        sync: false
+
   - type: web
     name: agriconnect-web
     runtime: static
@@ -24,5 +49,5 @@ services:
         source: /*
         destination: /index.html
     envVars:
-      - key: VITE_API_URL         # set to your API URL, no trailing slash
+      - key: VITE_API_URL            # your API URL, no trailing slash
         sync: false

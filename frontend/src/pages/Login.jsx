@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api, session } from '../api.js';
+import { api, session, useMeta } from '../api.js';
 
 export default function Login({ onAuth }) {
   const [params] = useSearchParams();
+  const { states } = useMeta();
   const [mode, setMode] = useState(params.get('role') ? 'register' : 'login');
-  const [f, setF] = useState({ name: '', email: '', password: '', role: params.get('role') || 'farmer', language: 'en' });
+  const [f, setF] = useState({ name: '', email: '', password: '', phone: '', state: '', role: params.get('role') || 'farmer', language: 'en' });
   const [err, setErr] = useState('');
   const nav = useNavigate();
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const needsState = ['farmer', 'buyer'].includes(f.role);
 
   async function submit(e) {
     e.preventDefault(); setErr('');
     try {
       const { token, user } = await api(`/auth/${mode}`, { method: 'POST', body: f });
-      session.save(token, user); onAuth(user); nav('/');
+      session.save(token, user); onAuth(user); nav('/dashboard');
     } catch (e2) { setErr(e2.message); }
   }
 
@@ -22,19 +24,18 @@ export default function Login({ onAuth }) {
     <form className="card narrow" onSubmit={submit}>
       <h2>{mode === 'login' ? 'Log in' : 'Create your account'}</h2>
       {mode === 'register' && <>
-        <label>Full name<input value={f.name} onChange={set('name')} required /></label>
         <label>I am a
           <select value={f.role} onChange={set('role')}>
-            <option value="farmer">Farmer</option><option value="investor">Investor</option>
-            <option value="buyer">Buyer / processor</option><option value="provider">Equipment provider</option>
+            <option value="farmer">Farmer</option><option value="investor">Investor</option><option value="buyer">Buyer / processor</option>
           </select>
         </label>
-        <label>Language
-          <select value={f.language} onChange={set('language')}>
-            <option value="en">English</option><option value="yo">Yoruba</option><option value="ig">Igbo</option>
-            <option value="ha">Hausa</option><option value="pcm">Pidgin</option>
-          </select>
-        </label>
+        <label>Full name<input value={f.name} onChange={set('name')} required /></label>
+        <label>Phone (optional)<input type="tel" value={f.phone} onChange={set('phone')} /></label>
+        {needsState && (
+          <label>Your state{f.role === 'farmer' ? ' (where your farm is)' : ' (where you want delivery)'}
+            <select value={f.state} onChange={set('state')} required><option value="">Choose a state…</option>{states.map((s) => <option key={s}>{s}</option>)}</select>
+          </label>
+        )}
       </>}
       <label>Email<input type="email" value={f.email} onChange={set('email')} required /></label>
       <label>Password<input type="password" minLength={8} value={f.password} onChange={set('password')} required /></label>
