@@ -58,3 +58,41 @@ input,select,textarea { padding:.6rem; border:1px solid var(--line); border-radi
 :focus-visible { outline:3px solid var(--millet); outline-offset:2px; }
 /* Easy mode: bigger type and targets, simpler look */
 .easy { font-size:22px; } .easy .path { padding:1.6rem; font-size:1.4rem; } .easy .btn,.easy .ghost,.easy input,.easy select { min-height:56px; }
+
+/* ---------- hover feedback on everything clickable ---------- */
+a:hover { color: var(--leaf-dark); }
+.btn:hover { background: var(--leaf-dark); }
+.top .btn:hover { background: #f6cb4d; color: var(--ink); }
+.ghost:hover { background: var(--sky); border-color: var(--leaf); }
+.top .ghost:hover { background: rgba(255,255,255,.2); border-color: #fff; }
+.top nav a:hover { border-color: rgba(255,255,255,.65); }
+.tab:hover, .chip:hover { background: var(--sky); border-color: var(--leaf); }
+.tab.on:hover { background: var(--leaf-dark); }
+.path:hover { background: var(--sky); border-color: var(--leaf-dark); transform: translateY(-1px); }
+.cta .path:hover { background: var(--millet); color: var(--ink); }
+.photo-add:hover { background: var(--sky); }
+tbody tr:hover td { background: #f3f8f5; }
+.btn, .ghost, .tab, .chip, .path, .photo-add { transition: background .15s, border-color .15s, color .15s, transform .15s; }
+
+/* ---------- forms ---------- */
+.field { display: flex; flex-direction: column; gap: .2rem; } .field > label { font-weight: 600; }
+.pw { display: flex; gap: .4rem; } .pw input { flex: 1; min-width: 0; } .pw .ghost { color: var(--leaf); min-width: 4.2rem; }
+.small { font-size: .9rem; } fieldset { border: 0; padding: 0; margin: 0; }
+.wide { max-width: 640px; margin-left: 0; } .kyc { max-width: 680px; margin: 1.5rem auto; }
+.notice { padding: .7rem 1rem; border-radius: 6px; background: var(--sky); margin: .2rem 0; } .notice.good { background: #d6efdd; } .notice.bad { background: #f6d9d6; }
+.banner { background: #fbeebf; padding: .6rem 1.4rem; text-align: center; border-bottom: 1px solid #e8d38a; }
+
+/* ---------- investor dashboard (wallet style) ---------- */
+.wallet { background: linear-gradient(135deg, #14502f, #1d6b43 60%, #2f8a57); color: #fff; border-radius: 16px; padding: 1.4rem 1.6rem; margin: 1rem 0 1.5rem; box-shadow: 0 8px 24px #14502f33; }
+.wallet p { margin: 0; opacity: .85; } .wallet h2 { font-size: 2.6rem; margin: .1rem 0 1rem; }
+.wallet-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .8rem; }
+.wallet-row div { background: #ffffff1f; border-radius: 10px; padding: .6rem .8rem; } .wallet-row span { display: block; font-size: .85rem; opacity: .85; } .wallet-row b { font-size: 1.15rem; }
+.inv { border-radius: 14px; } .inv-top { display: flex; justify-content: space-between; align-items: center; } .inv-amt { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.9rem; font-weight: 800; }
+.count { display: grid; grid-template-columns: repeat(4, 1fr); gap: .4rem; margin: .2rem 0; }
+.count div { background: var(--sky); border-radius: 10px; padding: .45rem 0; text-align: center; } .count b { display: block; font-size: 1.5rem; font-family: 'Bricolage Grotesque', sans-serif; } .count span { font-size: .75rem; color: var(--muted); }
+.bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin: .4rem 0; } .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--leaf), var(--millet)); border-radius: 99px; }
+.grid.plans { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.plan { border-radius: 14px; } .plan-term { font-weight: 700; } .rate { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.2rem; color: var(--leaf); } .preview { background: var(--sky); padding: .5rem .7rem; border-radius: 8px; margin: 0; }
+.badge.active { background: #d6efdd; } .badge.matured { background: #fbeebf; } .badge.paid { background: #cfe6f5; } .badge.approved, .badge.verified { background: #d6efdd; } .badge.rejected { background: #f6d9d6; } .badge.submitted { background: #fbeebf; }
+
+.btn:disabled, .btn:disabled:hover { background: #9db3a6; cursor: not-allowed; }

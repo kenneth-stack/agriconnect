@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query, one, tx, logActivity } from '../db.js';
-import { requireAuth } from '../auth.js';
+import { requireAuth, needKyc } from '../auth.js';
 import { upload, saveImages } from '../upload.js';
 import { HttpError } from '../http.js';
 import { EQUIPMENT_TYPES } from '../meta.js';
@@ -34,7 +34,7 @@ r.delete('/equipment/:id', requireAuth('admin'), async (req, res) => {
   res.json({ ok: true });
 });
 
-r.post('/equipment/:id/book', requireAuth('farmer', 'buyer'), async (req, res) => {
+r.post('/equipment/:id/book', requireAuth('farmer', 'buyer'), needKyc, async (req, res) => {
   const { start_date, end_date } = req.body;
   if (!DATE.test(start_date || '') || !DATE.test(end_date || '') || end_date < start_date) throw new HttpError(400, 'Choose valid start and end dates.');
   if (start_date < new Date().toISOString().slice(0, 10)) throw new HttpError(400, 'Start date cannot be in the past.');

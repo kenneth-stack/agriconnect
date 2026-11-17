@@ -3,8 +3,9 @@ import { Navigate } from 'react-router-dom';
 import { api, naira, when, useMeta } from '../api.js';
 import ListingForm from '../components/ListingForm.jsx';
 import PhotoPicker from '../components/PhotoPicker.jsx';
+import { monthsLabel } from '../components/Plans.jsx';
 
-const TABS = ['Overview', 'Upload produce', 'Farmers & users', 'Equipment', 'Bookings', 'Orders', 'Activity'];
+const TABS = ['Overview', 'KYC', 'Assistance', 'Investments', 'Plans', 'Upload produce', 'Farmers & users', 'Equipment', 'Bookings', 'Orders', 'Activity', 'Admins'];
 
 export default function Admin({ user }) {
   const [tab, setTab] = useState('Overview');
@@ -14,12 +15,17 @@ export default function Admin({ user }) {
       <h2>Admin portal</h2>
       <div className="tabs" role="tablist">{TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'tab on' : 'tab'} onClick={() => setTab(t)}>{t}</button>)}</div>
       {tab === 'Overview' && <Overview />}
+      {tab === 'KYC' && <KycAdmin />}
+      {tab === 'Assistance' && <AssistanceAdmin />}
+      {tab === 'Investments' && <InvestmentsAdmin />}
+      {tab === 'Plans' && <PlansAdmin />}
       {tab === 'Upload produce' && <Produce />}
       {tab === 'Farmers & users' && <Users />}
       {tab === 'Equipment' && <EquipmentAdmin />}
       {tab === 'Bookings' && <Bookings />}
       {tab === 'Orders' && <Orders />}
       {tab === 'Activity' && <Activity />}
+      {tab === 'Admins' && <Admins me={user} />}
     </>
   );
 }
@@ -97,8 +103,8 @@ function Users() {
         </div>
         <button className="btn">Register farmer</button><Msg m={m} />
       </form>
-      <div className="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>State</th><th>Email</th><th>Phone</th><th>Joined</th></tr></thead>
-        <tbody>{users?.map((u) => <tr key={u.id}><td>{u.name}</td><td>{u.role}</td><td>{u.state}</td><td>{u.email}</td><td>{u.phone}</td><td>{when(u.created_at)}</td></tr>)}</tbody></table></div>
+      <div className="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>State</th><th>Email</th><th>Phone</th><th>Joined</th><th></th></tr></thead>
+        <tbody>{users?.map((u) => <tr key={u.id}><td>{u.name}</td><td>{u.role}</td><td>{u.state}</td><td>{u.email}</td><td>{u.phone}</td><td>{when(u.created_at)}</td><td>{u.role !== 'admin' && <button className="ghost" onClick={() => { const p = window.prompt(`New temporary password for ${u.name} (8+ characters)`); if (p) api(`/admin/users/${u.id}/password`, { method: 'PATCH', body: { password: p } }).then(() => window.alert('Password set. Share it with them privately.')).catch((e) => window.alert(e.message)); }}>Set password</button>}</td></tr>)}</tbody></table></div>
     </>
   );
 }
@@ -155,4 +161,107 @@ function Orders() {
 function Activity() {
   const [list] = useLoad('/admin/activity');
   return <ul className="timeline">{list?.map((a) => <li key={a.id}><span>{when(a.created_at)}</span> <b>{a.name}</b> ({a.role}): {a.detail}</li>)}</ul>;
+}
+
+function Admins({ me }) {
+  const [list, reload] = useLoad('/admin/admins');
+  const [f, setF] = useState({ name: '', email: '', password: '' });
+  const [m, setM] = useState(null);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  return (
+    <>
+      <form className="card" onSubmit={async (e) => {
+        e.preventDefault();
+        try { await api('/admin/admins', { method: 'POST', body: f }); setM({ ok: 'Admin created. Share the temporary password privately and ask them to change it after logging in.' }); setF({ name: '', email: '', password: '' }); reload(); }
+        catch (er) { setM({ err: er.message }); }
+      }}>
+        <h3>Add another admin</h3>
+        <p className="muted">Admins can upload produce, add equipment, register farmers and see all activity. Only add people you trust.</p>
+        <div className="row">
+          <label className="grow">Name<input value={f.name} onChange={set('name')} required /></label>
+          <label className="grow">Email<input type="email" value={f.email} onChange={set('email')} required /></label>
+          <label className="grow">Temporary password<input value={f.password} minLength={8} onChange={set('password')} required /></label>
+        </div>
+        <button className="btn">Create admin</button><Msg m={m} />
+      </form>
+      <h3>Current admins</h3>
+      <div className="table-wrap"><table><tbody>{list?.map((a) => (
+        <tr key={a.id}><td>{a.name}{a.id === me.id && ' (you)'}</td><td>{a.email}</td><td>Since {when(a.created_at)}</td>
+          <td>{a.id !== me.id && <button className="ghost" onClick={() => window.confirm(`Remove admin access for ${a.name}?`) && api(`/admin/admins/${a.id}`, { method: 'DELETE' }).then(reload)}>Remove access</button>}</td></tr>))}</tbody></table></div>
+    </>
+  );
+}
+
+function KycAdmin() {
+  const [list, reload] = useLoad('/admin/kyc');
+  const review = async (id, status) => {
+    let note = null;
+    if (status === 'rejected') { note = window.prompt('Reason for rejecting (the user will see this):'); if (note === null) return; }
+    await api(`/admin/kyc/${id}`, { method: 'PATCH', body: { status, note } }); reload();
+  };
+  const reveal = async (id) => { const r = await api(`/admin/kyc/${id}/reveal`); window.alert(`BVN: ${r.bvn}\nID number: ${r.id_number}\n\nThis view has been logged.`); };
+  return <div className="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>State</th><th>ID</th><th>BVN</th><th>Status</th><th></th></tr></thead><tbody>{list?.map((k) => (
+    <tr key={k.user_id}><td>{k.name}<br /><span className="muted">{k.email}</span></td><td>{k.role}</td><td>{k.state}</td><td>{k.id_type} ••••{k.id_last4}</td><td>••••••{k.bvn_last4}</td>
+      <td><span className={'badge ' + k.status}>{k.status}</span>{k.review_note && <><br /><span className="muted">{k.review_note}</span></>}</td>
+      <td className="row"><button className="ghost" onClick={() => reveal(k.user_id)}>View full</button>
+        {k.status !== 'verified' && <button className="btn" onClick={() => review(k.user_id, 'verified')}>Verify</button>}
+        {k.status !== 'rejected' && <button className="ghost" onClick={() => review(k.user_id, 'rejected')}>Reject</button>}</td></tr>))}</tbody></table>
+    {list && !list.length && <p className="muted">No KYC profiles yet.</p>}</div>;
+}
+
+function AssistanceAdmin() {
+  const [list, reload] = useLoad('/admin/assistance');
+  const decide = async (id, status) => {
+    const note = window.prompt(status === 'approved' ? 'Note for the farmer (optional), e.g. where to collect:' : 'Reason for rejecting (the farmer will see this):');
+    if (note === null) return;
+    try { await api(`/admin/assistance/${id}`, { method: 'PATCH', body: { status, note } }); reload(); } catch (e) { window.alert(e.message); }
+  };
+  return <div className="table-wrap"><table><thead><tr><th>Farmer</th><th>Request</th><th>Status</th><th></th></tr></thead><tbody>{list?.map((a) => (
+    <tr key={a.id}><td>{a.farmer}<br /><span className="muted">{a.state} · {a.phone}</span></td>
+      <td><b>{a.item}</b> · {a.quantity} {a.unit}<br /><span className="muted">{a.description}</span><br /><span className="muted">{when(a.created_at)}</span></td>
+      <td><span className={'badge ' + a.status}>{a.status}</span>{a.admin_note && <><br /><span className="muted">{a.admin_note}</span></>}</td>
+      <td className="row">{a.status === 'pending' && <><button className="btn" onClick={() => decide(a.id, 'approved')}>Approve</button><button className="ghost" onClick={() => decide(a.id, 'rejected')}>Reject</button></>}</td></tr>))}</tbody></table>
+    {list && !list.length && <p className="muted">No applications yet.</p>}</div>;
+}
+
+function InvestmentsAdmin() {
+  const [list, reload] = useLoad('/admin/investments');
+  const act = (id, action) => api(`/admin/investments/${id}`, { method: 'PATCH', body: { action } }).then(reload).catch((e) => window.alert(e.message));
+  return <>
+    <p className="muted">When an investor pays, click <b>Confirm payment</b>. That starts their countdown. After a plan matures, pay the investor and click <b>Mark paid</b>.</p>
+    <div className="table-wrap"><table><thead><tr><th>Investor</th><th>Plan</th><th>Amount</th><th>Expected payout</th><th>Status</th><th></th></tr></thead><tbody>{list?.map((i) => (
+      <tr key={i.id}><td>{i.investor}<br /><span className="muted">{when(i.created_at)}</span></td><td>{monthsLabel(i.duration_months)} at {i.rate_percent}%</td><td>{naira(i.amount)}</td><td>{naira(i.amount + i.expected_return)}</td>
+        <td><span className={'badge ' + i.display_status}>{i.display_status}</span>{i.maturity_date && <><br /><span className="muted">Matures {when(i.maturity_date)}</span></>}</td>
+        <td className="row">{i.status === 'pending' && <><button className="btn" onClick={() => act(i.id, 'confirm')}>Confirm payment</button><button className="ghost" onClick={() => act(i.id, 'cancel')}>Cancel</button></>}
+          {i.status === 'active' && <button className="ghost" onClick={() => act(i.id, 'paid')}>Mark paid</button>}</td></tr>))}</tbody></table>
+      {list && !list.length && <p className="muted">No investments yet.</p>}</div></>;
+}
+
+function PlansAdmin() {
+  const [list, reload] = useLoad('/admin/plans');
+  const [edit, setEdit] = useState({});
+  const [f, setF] = useState({ duration_months: '', rate_percent: '', min_amount: '' });
+  const [m, setM] = useState(null);
+  const val = (p, k) => edit[p.id]?.[k] ?? p[k];
+  const put = (p, k) => (e) => setEdit({ ...edit, [p.id]: { ...edit[p.id], [k]: k === 'active' ? e.target.checked : e.target.value } });
+  return <>
+    <p className="muted">Set the yearly rate and minimum for each plan. Changes apply to <b>new</b> investments only. Existing investors keep the rate they signed up with. The starting rates are placeholders: set your real ones before launch.</p>
+    <div className="table-wrap"><table><thead><tr><th>Duration</th><th>Rate % per year</th><th>Minimum (₦)</th><th>Active</th><th></th></tr></thead><tbody>{list?.map((p) => (
+      <tr key={p.id}><td>{monthsLabel(p.duration_months)}</td>
+        <td><input type="number" step="any" value={val(p, 'rate_percent')} onChange={put(p, 'rate_percent')} /></td>
+        <td><input type="number" value={val(p, 'min_amount')} onChange={put(p, 'min_amount')} /></td>
+        <td><input type="checkbox" checked={val(p, 'active')} onChange={put(p, 'active')} aria-label="Active" /></td>
+        <td><button className="btn" onClick={() => api(`/admin/plans/${p.id}`, { method: 'PATCH', body: edit[p.id] || {} }).then(() => { setEdit({ ...edit, [p.id]: undefined }); reload(); })}>Save</button></td></tr>))}</tbody></table></div>
+    <form className="card" onSubmit={async (e) => {
+      e.preventDefault();
+      try { await api('/admin/plans', { method: 'POST', body: f }); setM({ ok: 'Plan added.' }); setF({ duration_months: '', rate_percent: '', min_amount: '' }); reload(); } catch (er) { setM({ err: er.message }); }
+    }}>
+      <h3>Add a plan</h3>
+      <div className="row">
+        <label className="grow">Months<input type="number" min="1" max="120" value={f.duration_months} onChange={(e) => setF({ ...f, duration_months: e.target.value })} required /></label>
+        <label className="grow">Rate % per year<input type="number" step="any" value={f.rate_percent} onChange={(e) => setF({ ...f, rate_percent: e.target.value })} required /></label>
+        <label className="grow">Minimum (₦)<input type="number" value={f.min_amount} onChange={(e) => setF({ ...f, min_amount: e.target.value })} required /></label>
+      </div>
+      <button className="btn">Add plan</button><Msg m={m} />
+    </form></>;
 }

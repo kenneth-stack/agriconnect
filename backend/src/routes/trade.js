@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { query, one, tx, logActivity } from '../db.js';
-import { requireAuth } from '../auth.js';
+import { one, tx, logActivity } from '../db.js';
+import { requireAuth, needKyc } from '../auth.js';
 import { HttpError } from '../http.js';
 
 const r = Router();
 
 /* Orders (trades) */
-r.post('/orders', requireAuth('farmer', 'buyer', 'investor'), async (req, res) => {
+r.post('/orders', requireAuth('farmer', 'buyer', 'investor'), needKyc, async (req, res) => {
   const { listing_id, quantity, delivery_state, note } = req.body;
   const qty = Number(quantity);
   const l = await one("SELECT * FROM listings WHERE id=$1 AND status='available'", [Number(listing_id) || 0]);
@@ -51,38 +51,6 @@ r.patch('/orders/:id/status', requireAuth(), async (req, res) => {
     await logActivity(q, o.farmer_id, `order_${next}`, text);
   });
   res.json({ ok: true });
-});
-
-/* Investment marketplace */
-r.get('/projects', async (_q, res) => {
-  res.json(await query(`SELECT p.id, p.title, p.crop, p.description, p.amount_needed, p.amount_funded, p.created_at,
-      u.id AS farmer_id, u.name AS farmer, u.state,
-      (SELECT COUNT(*)::int FROM investments i WHERE i.project_id = p.id) AS investors
-    FROM projects p JOIN users u ON u.id = p.farmer_id WHERE p.status='open' ORDER BY p.created_at DESC`));
-});
-
-r.post('/projects', requireAuth('farmer'), async (req, res) => {
-  const { title, crop, description } = req.body;
-  const need = Number(req.body.amount_needed);
-  if (!title?.trim() || !(need > 0)) throw new HttpError(400, 'Title and amount needed are required.');
-  const p = await one('INSERT INTO projects (farmer_id,title,crop,description,amount_needed) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-    [req.user.id, title.trim(), crop || null, description || null, need]);
-  await logActivity(query, req.user.id, 'funding_request', `Asked for funding: ${title.trim()}`);
-  res.status(201).json({ id: p.id });
-});
-
-r.post('/projects/:id/invest', requireAuth('investor'), async (req, res) => {
-  const amount = Number(req.body.amount);
-  await tx(async (q) => {
-    const [p] = await q("SELECT * FROM projects WHERE id=$1 AND status='open' FOR UPDATE", [Number(req.params.id) || 0]);
-    if (!p) throw new HttpError(404, 'This project is not open for funding.');
-    if (!(amount > 0) || amount > p.amount_needed - p.amount_funded) throw new HttpError(400, 'Amount is more than what is still needed.');
-    await q('INSERT INTO investments (project_id,investor_id,amount) VALUES ($1,$2,$3)', [p.id, req.user.id, amount]);
-    await q("UPDATE projects SET amount_funded = amount_funded + $1, status = CASE WHEN amount_funded + $1 >= amount_needed THEN 'funded' ELSE status END WHERE id=$2", [amount, p.id]);
-    await logActivity(q, req.user.id, 'invested', `Invested ₦${amount.toLocaleString('en-NG')} in ${p.title}`);
-    await logActivity(q, p.farmer_id, 'received_investment', `Received ₦${amount.toLocaleString('en-NG')} for ${p.title}`);
-  });
-  res.status(201).json({ ok: true, note: 'Connect a payment gateway with escrow before real money moves.' });
 });
 
 export default r;

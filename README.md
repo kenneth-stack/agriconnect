@@ -13,7 +13,37 @@
 4. Log in with the admin email/password. Admins add equipment, register farmers and upload produce for them.
 
 ## Roles
-farmer, investor, buyer (public sign-up) and admin (created from ADMIN_EMAIL/ADMIN_PASSWORD only).
+farmer, investor, buyer (public sign-up) and admin. The first admin comes from ADMIN_EMAIL/ADMIN_PASSWORD; after that,
+admins add other admins in Admin portal > Admins.
+
+## KYC
+Farmers, investors and buyers must submit a KYC profile (including BVN) before they can order, list produce, invest,
+request assistance or book equipment. BVN and ID numbers are stored encrypted (KYC_ENCRYPTION_KEY). Admins review profiles
+in Admin > KYC. The BVN is only checked for format (11 digits); it is NOT checked against NIBSS. To verify BVNs
+automatically, connect a licensed provider (e.g. Paystack, Dojah, Youverify) and call it in routes/kyc.js.
+
+## Assistance / Funding
+Farmers request items (manure, seedlings, land, ...) with a quantity and description. Admins approve or reject in Admin > Assistance.
+
+## Investment plans
+Investors can explore plans (12, 18, 24, 36, 48, 60 months) and see their expected return, but **payment is switched off**:
+the Invest button shows "Payment coming soon" and nothing is created (PAYMENTS_ENABLED=false, the default).
+When you connect Stripe, replace the body of POST /plans/:id/invest (backend/src/routes/plans.js) with the Stripe checkout
+and confirm the investment from Stripe's webhook, then set PAYMENTS_ENABLED=true.
+(With PAYMENTS_ENABLED=true and no Stripe, the app runs a manual flow: the investment starts "pending", an admin clicks
+Confirm payment in Admin > Investments to start the countdown, then Mark paid after payout.)
+The starting rates are PLACEHOLDERS: set real ones in Admin > Plans. Offering fixed returns to the public is regulated in
+Nigeria; get legal advice (SEC/CBN) first.
+
+## Emails
+All email goes through one function, sendMail() in backend/src/mailer.js (Resend by default: RESEND_API_KEY + MAIL_FROM).
+Sent today: welcome email after sign-up, and password-reset links. If email is not set up yet, nothing breaks: registration
+still works and the skipped email is noted in the API log. To use another provider later, change only sendMail().
+Accounts created by an admin do not get an email (they receive their login details from the admin).
+
+## Forgot password
+Needs email to be set up (see Emails above). Without them, reset links are printed in the
+API's log, and admins can set a temporary password for a user in Admin > Farmers & users.
 
 ## Photos
 Two storage modes, chosen automatically:

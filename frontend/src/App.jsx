@@ -1,36 +1,55 @@
-import { useState } from 'react';
-import { Routes, Route, NavLink, Link, useNavigate } from 'react-router-dom';
-import { session } from './api.js';
+import { useEffect, useState } from 'react';
+import { Routes, Route, NavLink, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import { api, session } from './api.js';
 import Home from './pages/Home.jsx';
 import Marketplace from './pages/Marketplace.jsx';
 import FarmerProfile from './pages/FarmerProfile.jsx';
-import Investment from './pages/Investment.jsx';
+import Invest from './pages/Invest.jsx';
 import Equipment from './pages/Equipment.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import MyFarm from './pages/MyFarm.jsx';
+import Assistance from './pages/Assistance.jsx';
 import History from './pages/History.jsx';
+import Kyc from './pages/Kyc.jsx';
 import Admin from './pages/Admin.jsx';
 import Assistant from './pages/Assistant.jsx';
 import Login from './pages/Login.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
+
+const kycOk = (u) => u.role === 'admin' || ['submitted', 'verified'].includes(u.kyc);
+
+// Signed-in pages: send visitors to log in, and people without a KYC profile to complete it first
+function Gate({ user, children }) {
+  if (!user) return <Navigate to="/login" />;
+  return kycOk(user) ? children : <Navigate to="/kyc" />;
+}
 
 export default function App() {
-  const [user, setUser] = useState(session.user);
+  const [user, setUserState] = useState(session.user);
   const [easy, setEasy] = useState(localStorage.getItem('easy') === '1');
   const [menu, setMenu] = useState(false);
   const nav = useNavigate();
+  const { pathname } = useLocation();
+  const setUser = (u) => { if (u) localStorage.setItem('user', JSON.stringify(u)); setUserState(u); };
   const toggleEasy = () => { localStorage.setItem('easy', easy ? '0' : '1'); setEasy(!easy); };
-  const logout = () => { session.clear(); setUser(null); nav('/'); };
+  const logout = () => { session.clear(); setUserState(null); nav('/'); };
   const go = () => setMenu(false);
 
-  // Signed-in people get a role-specific menu bar; visitors get the public one
+  // keep the KYC status fresh (an admin may have reviewed it since last login)
+  useEffect(() => {
+    if (user && user.role !== 'admin') api('/kyc/me').then((k) => k.status !== user.kyc && setUser({ ...user, kyc: k.status })).catch(() => {});
+  }, []);
+
   const links = !user
     ? [['/marketplace', 'Buy produce'], ['/investment', 'Invest'], ['/equipment', 'Hire equipment'], ['/assistant', 'Ask the AI']]
     : [
         ['/dashboard', 'Dashboard'],
-        ...(user.role === 'farmer' ? [['/my-farm', 'My farm']] : []),
+        ...(user.role === 'farmer' ? [['/my-farm', 'My farm'], ['/assistance', 'Assistance/Funding']] : []),
         ...(user.role === 'admin' ? [['/admin', 'Admin portal']] : []),
-        ['/marketplace', 'Marketplace'], ['/investment', user.role === 'investor' ? 'Farms to fund' : 'Funding'],
-        ['/equipment', 'Equipment'], ['/history', 'History'], ['/assistant', 'Ask the AI']
+        ['/marketplace', 'Marketplace'], ['/investment', 'Invest'], ['/equipment', 'Equipment'],
+        ...(user.role !== 'admin' ? [['/history', 'History'], ['/kyc', 'KYC profile']] : []),
+        ['/assistant', 'Ask the AI']
       ];
 
   return (
@@ -47,19 +66,26 @@ export default function App() {
                 : <NavLink className="btn" to="/login">Log in</NavLink>}
         </div>
       </header>
+      {user && !kycOk(user) && pathname !== '/kyc' && (
+        <div className="banner">Complete your KYC profile to start buying, selling, investing or requesting assistance. <Link to="/kyc">Complete it now</Link></div>
+      )}
       <main>
         <Routes>
           <Route path="/" element={<Home user={user} easy={easy} />} />
           <Route path="/marketplace" element={<Marketplace user={user} />} />
           <Route path="/farmers/:id" element={<FarmerProfile user={user} />} />
-          <Route path="/investment" element={<Investment user={user} />} />
+          <Route path="/investment" element={<Invest user={user} />} />
           <Route path="/equipment" element={<Equipment user={user} />} />
-          <Route path="/dashboard" element={<Dashboard user={user} />} />
-          <Route path="/my-farm" element={<MyFarm user={user} />} />
-          <Route path="/history" element={<History user={user} />} />
+          <Route path="/dashboard" element={<Gate user={user}><Dashboard user={user} /></Gate>} />
+          <Route path="/my-farm" element={<Gate user={user}><MyFarm user={user} /></Gate>} />
+          <Route path="/assistance" element={<Gate user={user}><Assistance user={user} /></Gate>} />
+          <Route path="/history" element={<Gate user={user}><History user={user} /></Gate>} />
+          <Route path="/kyc" element={<Kyc user={user} onDone={(status) => setUser({ ...user, kyc: status })} />} />
           <Route path="/admin" element={<Admin user={user} />} />
           <Route path="/assistant" element={<Assistant user={user} />} />
           <Route path="/login" element={<Login onAuth={setUser} />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
         </Routes>
       </main>
       <footer className="foot">

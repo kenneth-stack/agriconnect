@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query, one, tx, logActivity } from '../db.js';
-import { requireAuth } from '../auth.js';
+import { requireAuth, needKyc } from '../auth.js';
 import { upload, saveImages } from '../upload.js';
 import { HttpError } from '../http.js';
 import { r2Enabled, getImage, deleteImage, publicUrl } from '../storage.js';
@@ -77,7 +77,7 @@ r.get('/images/:id', async (req, res) => {
 });
 
 /* Farmers (or an admin on their behalf) */
-r.post('/listings', requireAuth('farmer', 'admin'), upload.array('images', 4), async (req, res) => {
+r.post('/listings', requireAuth('farmer', 'admin'), needKyc, upload.array('images', 4), async (req, res) => {
   const b = req.body;
   const farmer = await targetFarmer(req);
   const price = Number(b.price), quantity = Number(b.quantity);
@@ -106,7 +106,7 @@ r.delete('/listings/:id', requireAuth('farmer', 'admin'), async (req, res) => {
   res.json({ ok: true });
 });
 
-r.put('/farm/profile', requireAuth('farmer'), async (req, res) => {
+r.put('/farm/profile', requireAuth('farmer'), needKyc, async (req, res) => {
   const { farm_size_ha, main_crops, about } = req.body;
   await query(`INSERT INTO farmer_profiles (user_id, farm_size_ha, main_crops, about) VALUES ($1,$2,$3,$4)
     ON CONFLICT (user_id) DO UPDATE SET farm_size_ha=$2, main_crops=$3, about=$4`,
@@ -114,7 +114,7 @@ r.put('/farm/profile', requireAuth('farmer'), async (req, res) => {
   res.json({ ok: true });
 });
 
-r.post('/farm/photos', requireAuth('farmer', 'admin'), upload.array('images', 6), async (req, res) => {
+r.post('/farm/photos', requireAuth('farmer', 'admin'), needKyc, upload.array('images', 6), async (req, res) => {
   const farmer = await targetFarmer(req);
   if (!req.files?.length) throw new HttpError(400, 'Choose at least one photo.');
   await tx(async (q) => {

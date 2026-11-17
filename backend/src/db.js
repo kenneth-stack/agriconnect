@@ -26,15 +26,6 @@ CREATE TABLE IF NOT EXISTS orders (
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','completed','cancelled')),
   created_at TIMESTAMPTZ DEFAULT now(), updated_at TIMESTAMPTZ DEFAULT now()
 );
-CREATE TABLE IF NOT EXISTS projects (
-  id SERIAL PRIMARY KEY, farmer_id INT NOT NULL REFERENCES users(id), title TEXT NOT NULL, crop TEXT, description TEXT,
-  amount_needed DOUBLE PRECISION NOT NULL, amount_funded DOUBLE PRECISION NOT NULL DEFAULT 0,
-  status TEXT NOT NULL DEFAULT 'open', created_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE TABLE IF NOT EXISTS investments (
-  id SERIAL PRIMARY KEY, project_id INT NOT NULL REFERENCES projects(id),
-  investor_id INT NOT NULL REFERENCES users(id), amount DOUBLE PRECISION NOT NULL, created_at TIMESTAMPTZ DEFAULT now()
-);
 CREATE TABLE IF NOT EXISTS equipment (
   id SERIAL PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, description TEXT, state TEXT,
   price_per_day DOUBLE PRECISION NOT NULL, active BOOLEAN NOT NULL DEFAULT true,
@@ -56,6 +47,35 @@ CREATE TABLE IF NOT EXISTS activity (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS activity_user ON activity(user_id);
+CREATE TABLE IF NOT EXISTS kyc (
+  user_id INT PRIMARY KEY REFERENCES users(id), dob DATE NOT NULL, phone TEXT NOT NULL, address TEXT NOT NULL,
+  state TEXT NOT NULL, lga TEXT, id_type TEXT NOT NULL, id_number_enc TEXT NOT NULL, id_last4 TEXT NOT NULL,
+  bvn_enc TEXT NOT NULL, bvn_last4 TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted','verified','rejected')),
+  review_note TEXT, submitted_at TIMESTAMPTZ DEFAULT now(), reviewed_at TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS assistance_requests (
+  id SERIAL PRIMARY KEY, farmer_id INT NOT NULL REFERENCES users(id), item TEXT NOT NULL,
+  quantity DOUBLE PRECISION NOT NULL, unit TEXT NOT NULL, description TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  admin_note TEXT, reviewed_by INT REFERENCES users(id), reviewed_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS investment_plans (
+  id SERIAL PRIMARY KEY, duration_months INT UNIQUE NOT NULL, rate_percent DOUBLE PRECISION NOT NULL,
+  min_amount DOUBLE PRECISION NOT NULL DEFAULT 50000, active BOOLEAN NOT NULL DEFAULT true
+);
+CREATE TABLE IF NOT EXISTS plan_investments (
+  id SERIAL PRIMARY KEY, investor_id INT NOT NULL REFERENCES users(id), plan_id INT NOT NULL REFERENCES investment_plans(id),
+  amount DOUBLE PRECISION NOT NULL, duration_months INT NOT NULL, rate_percent DOUBLE PRECISION NOT NULL,
+  expected_return DOUBLE PRECISION NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','active','paid','cancelled')),
+  start_date TIMESTAMPTZ, maturity_date TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS password_resets (
+  id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id), token_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL, used_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS resets_hash ON password_resets(token_hash);
 ALTER TABLE images ALTER COLUMN data DROP NOT NULL;
 ALTER TABLE images ADD COLUMN IF NOT EXISTS storage_key TEXT;
 `;

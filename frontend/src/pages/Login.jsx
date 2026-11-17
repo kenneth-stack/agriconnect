@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, session, useMeta } from '../api.js';
+import PasswordInput from '../components/PasswordInput.jsx';
 
 export default function Login({ onAuth }) {
   const [params] = useSearchParams();
@@ -16,7 +17,9 @@ export default function Login({ onAuth }) {
     e.preventDefault(); setErr('');
     try {
       const { token, user } = await api(`/auth/${mode}`, { method: 'POST', body: f });
-      session.save(token, user); onAuth(user); nav('/dashboard');
+      session.save(token, user); onAuth(user);
+      // everyone except admins must complete their KYC profile first
+      nav(user.role === 'admin' || ['submitted', 'verified'].includes(user.kyc) ? '/dashboard' : '/kyc');
     } catch (e2) { setErr(e2.message); }
   }
 
@@ -37,11 +40,12 @@ export default function Login({ onAuth }) {
           </label>
         )}
       </>}
-      <label>Email<input type="email" value={f.email} onChange={set('email')} required /></label>
-      <label>Password<input type="password" minLength={8} value={f.password} onChange={set('password')} required /></label>
+      <label>Email<input type="email" value={f.email} onChange={set('email')} required autoComplete="email" /></label>
+      <PasswordInput value={f.password} onChange={set('password')} minLength={8} required autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+      {mode === 'login' && <Link to="/forgot-password" className="small">Forgot password?</Link>}
       {err && <p className="error" role="alert">{err}</p>}
       <button className="btn">{mode === 'login' ? 'Log in' : 'Create account'}</button>
-      <button type="button" className="ghost" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
+      <button type="button" className="ghost" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setErr(''); }}>
         {mode === 'login' ? 'New here? Create an account' : 'Have an account? Log in'}
       </button>
     </form>

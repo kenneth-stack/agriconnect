@@ -9,8 +9,8 @@ const LOGGED_OUT = [
   ['🚜 Hire equipment', '/equipment'], ['🛒 Buy produce', '/marketplace']
 ];
 const BY_ROLE = {
-  farmer: [['🌾 Go to my farm', '/my-farm'], ['🛒 Browse the marketplace', '/marketplace']],
-  investor: [['💰 Farms to fund', '/investment'], ['📜 My investments', '/history']],
+  farmer: [['🌾 Go to my farm', '/my-farm'], ['🤝 Request assistance', '/assistance'], ['🛒 Browse the marketplace', '/marketplace']],
+  investor: [['💰 Start investing', '/investment'], ['📊 My dashboard', '/dashboard']],
   buyer: [['🛒 Buy produce', '/marketplace'], ['📜 My orders', '/history']],
   admin: [['🛠️ Open admin portal', '/admin'], ['🛒 View marketplace', '/marketplace']]
 };
@@ -26,7 +26,7 @@ export default function Home({ user, easy }) {
       <section className="hero">
         <div>
           <h1>Connecting farmers to capital, technology and markets.</h1>
-          {!easy && <p>AgriConnect Africa is a marketplace where farmers sell directly to buyers, get funded by investors and hire the machines they need, all in one place.</p>}
+          {!easy && <p>AgriConnect Africa is a marketplace where farmers sell directly to buyers, get help with seeds, manure and other farm needs, and hire the machines they need, all in one place.</p>}
           {user && <p><strong>Welcome back, {user.name.split(' ')[0]}.</strong></p>}
           <div className="paths">{actions.map(([label, to]) => <Link key={to} to={to} className="path">{label}</Link>)}</div>
         </div>
@@ -68,10 +68,10 @@ export default function Home({ user, easy }) {
         <div className="grid three">
           <div className="card"><h3>🌾 For farmers</h3><ul>
             <li>Sell directly and keep more of your income</li><li>Show your produce and farmland with photos</li>
-            <li>Ask investors to fund your next season</li><li>Hire tractors and drones instead of buying them</li><li>Keep a record of every sale you make</li></ul></div>
+            <li>Request seedlings, manure, land and other farm assistance</li><li>Hire tractors and drones instead of buying them</li><li>Keep a record of every sale you make</li></ul></div>
           <div className="card"><h3>💰 For investors</h3><ul>
-            <li>Browse farms that need funding and see their progress</li><li>See photos and details of the farmer and farm</li>
-            <li>Fund part or all of a project</li><li>Track every investment in your history</li></ul></div>
+            <li>Choose a fixed-term plan from 12 months to 5 years</li><li>Watch a live countdown to your maturity date</li>
+            <li>See your amount, rate and expected payout at a glance</li><li>Track every investment in your history</li></ul></div>
           <div className="card"><h3>🛒 For buyers</h3><ul>
             <li>Buy fresh produce straight from the farm</li><li>Choose farmers in your own state</li>
             <li>See photos and prices before you order</li><li>Track every order from request to delivery</li></ul></div>
