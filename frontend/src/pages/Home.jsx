@@ -38,7 +38,7 @@ export default function Home({ user, easy }) {
         <div className="chips">
           {cats.map((c) => <Link key={c.category} className={'chip' + (c.count ? '' : ' dim')} to={`/marketplace?category=${encodeURIComponent(c.category)}`}>{EMOJI[c.category]} {c.category} <b>{c.count}</b></Link>)}
         </div>
-        {stocked.length === 0 && <p className="muted">Produce will appear here as soon as farmers start listing.</p>}
+        {stocked.length === 0 && <p className="muted"></p>}
         {stocked.map((c) => (
           <div key={c.category} className="cat-block">
             <div className="cat-head"><h3>{EMOJI[c.category]} {c.category}</h3><Link to={`/marketplace?category=${encodeURIComponent(c.category)}`}>See all {c.count} →</Link></div>
