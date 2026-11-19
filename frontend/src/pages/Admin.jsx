@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
-import { api, naira, when, useMeta } from '../api.js';
+import { api, img, naira, when, useMeta } from '../api.js';
 import ListingForm from '../components/ListingForm.jsx';
 import PhotoPicker from '../components/PhotoPicker.jsx';
 import { monthsLabel } from '../components/Plans.jsx';
 
-const TABS = ['Overview', 'KYC', 'Assistance', 'Investments', 'Plans', 'Upload produce', 'Farmers & users', 'Equipment', 'Bookings', 'Orders', 'Activity', 'Admins'];
+const TABS = ['Overview', 'KYC', 'Assistance', 'Investments', 'Payouts', 'Wallets', 'Plans & fees', 'Upload produce', 'Farmers & users', 'Equipment', 'Bookings', 'Orders', 'Activity', 'Admins'];
 
 export default function Admin({ user }) {
   const [tab, setTab] = useState('Overview');
@@ -18,7 +18,9 @@ export default function Admin({ user }) {
       {tab === 'KYC' && <KycAdmin />}
       {tab === 'Assistance' && <AssistanceAdmin />}
       {tab === 'Investments' && <InvestmentsAdmin />}
-      {tab === 'Plans' && <PlansAdmin />}
+      {tab === 'Payouts' && <PayoutsAdmin />}
+      {tab === 'Wallets' && <WalletsAdmin />}
+      {tab === 'Plans & fees' && <><PlansAdmin /><FeesAdmin /></>}
       {tab === 'Upload produce' && <Produce />}
       {tab === 'Farmers & users' && <Users />}
       {tab === 'Equipment' && <EquipmentAdmin />}
@@ -56,24 +58,33 @@ function Produce() {
   const [m, setM] = useState(null);
   const [files, setFiles] = useState([]);
   const [farmerId, setFarmerId] = useState('');
+  const [farm, loadFarm] = useLoad(farmerId ? `/farmers/${farmerId}` : '/meta');
+  const del = (text, fn) => window.confirm(text) && fn().then(() => { reload(); loadFarm(); }).catch((e) => window.alert(e.message));
   return (
     <>
-      <p className="muted">Upload produce, or farm photos, on behalf of a farmer.</p>
+      <p className="muted">Upload produce, or farm photos, on behalf of a farmer. You can also delete anything uploaded.</p>
       {farmers && <ListingForm farmers={farmers} onDone={reload} />}
       <form className="card" onSubmit={async (e) => {
         e.preventDefault();
         const fd = new FormData(); fd.append('farmer_id', farmerId); files.forEach((f) => fd.append('images', f));
-        try { await api('/farm/photos', { method: 'POST', body: fd }); setM({ ok: 'Farm photos uploaded.' }); setFiles([]); } catch (er) { setM({ err: er.message }); }
+        try { await api('/farm/photos', { method: 'POST', body: fd }); setM({ ok: 'Farm photos uploaded.' }); setFiles([]); loadFarm(); } catch (er) { setM({ err: er.message }); }
       }}>
-        <h3>Upload farm photos for a farmer</h3>
+        <h3>Farm photos for a farmer</h3>
         <select value={farmerId} onChange={(e) => setFarmerId(e.target.value)} required aria-label="Farmer"><option value="">Choose a farmer…</option>{farmers?.map((f) => <option key={f.id} value={f.id}>{f.name} ({f.state})</option>)}</select>
+        {farmerId && farm?.photos && <div className="thumbs">{farm.photos.map((p) => (
+          <span className="thumb" key={p.id}><img src={img(p.id)} alt="Farm" /><button type="button" aria-label="Delete photo" onClick={() => del('Delete this farm photo?', () => api(`/images/${p.id}`, { method: 'DELETE' }))}>×</button></span>
+        ))}</div>}
         <PhotoPicker files={files} onChange={setFiles} max={6} label="Add farm photos" />
         {files.length > 0 && <button className="btn">Upload</button>}<Msg m={m} />
       </form>
       <h3>All produce on sale</h3>
       <div className="table-wrap"><table><tbody>{list?.map((l) => (
-        <tr key={l.id}><td>{l.title}</td><td>{l.category}</td><td>{l.farmer} ({l.state})</td><td>{l.quantity} {l.unit}</td><td>{naira(l.price)}</td>
-          <td><button className="ghost" onClick={() => api(`/listings/${l.id}`, { method: 'DELETE' }).then(reload)}>Remove</button></td></tr>))}</tbody></table></div>
+        <tr key={l.id}>
+          <td><div className="thumbs">{(l.image_ids || []).map((id) => (
+            <span className="thumb" key={id}><img src={img(id)} alt={l.title} /><button type="button" aria-label="Delete photo" onClick={() => del('Delete this photo?', () => api(`/images/${id}`, { method: 'DELETE' }))}>×</button></span>
+          ))}</div></td>
+          <td><b>{l.title}</b><br /><span className="muted small">{l.category}</span></td><td>{l.farmer} ({l.state})</td><td>{l.quantity} {l.unit}</td><td>{naira(l.price)}</td>
+          <td><button className="ghost" onClick={() => del(`Delete "${l.title}" and all its photos?`, () => api(`/listings/${l.id}`, { method: 'DELETE' }))}>Delete</button></td></tr>))}</tbody></table></div>
     </>
   );
 }
@@ -104,7 +115,7 @@ function Users() {
         <button className="btn">Register farmer</button><Msg m={m} />
       </form>
       <div className="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>State</th><th>Email</th><th>Phone</th><th>Joined</th><th></th></tr></thead>
-        <tbody>{users?.map((u) => <tr key={u.id}><td>{u.name}</td><td>{u.role}</td><td>{u.state}</td><td>{u.email}</td><td>{u.phone}</td><td>{when(u.created_at)}</td><td>{u.role !== 'admin' && <button className="ghost" onClick={() => { const p = window.prompt(`New temporary password for ${u.name} (8+ characters)`); if (p) api(`/admin/users/${u.id}/password`, { method: 'PATCH', body: { password: p } }).then(() => window.alert('Password set. Share it with them privately.')).catch((e) => window.alert(e.message)); }}>Set password</button>}</td></tr>)}</tbody></table></div>
+        <tbody>{users?.map((u) => <tr key={u.id}><td>{u.name}</td><td>{u.role}</td><td>{u.state}</td><td>{u.email}</td><td>{u.phone}</td><td>{when(u.created_at)}</td><td>{u.role !== 'admin' && <button className="ghost" onClick={() => { const p = window.prompt(`New temporary password for ${u.name} (8+ characters)`); if (p) api(`/admin/users/${u.id}/password`, { method: 'PATCH', body: { password: p } }).then(() => window.alert('Password set. Share it with them privately.')).catch((e) => window.alert(e.message)); }}>Set password</button>}{u.role !== 'admin' && <button className="ghost danger" onClick={() => window.confirm(`Delete the account of ${u.name}? Their personal data, photos, KYC and farms are erased. This cannot be undone.`) && api(`/admin/users/${u.id}`, { method: 'DELETE' }).then(reload).catch((e) => window.alert(e.message))}>Delete</button>}</td></tr>)}</tbody></table></div>
     </>
   );
 }
@@ -137,7 +148,7 @@ function EquipmentAdmin() {
       </form>
       <div className="table-wrap"><table><tbody>{list?.map((e) => (
         <tr key={e.id}><td>{e.name}</td><td>{e.type}</td><td>{e.state}</td><td>{naira(e.price_per_day)}/day</td>
-          <td><button className="ghost" onClick={() => api(`/equipment/${e.id}`, { method: 'DELETE' }).then(reload)}>Remove</button></td></tr>))}</tbody></table></div>
+          <td><button className="ghost" onClick={() => window.confirm(`Delete ${e.name} and its photos?`) && api(`/equipment/${e.id}`, { method: 'DELETE' }).then(reload).catch((er) => window.alert(er.message))}>Delete</button></td></tr>))}</tbody></table></div>
     </>
   );
 }
@@ -153,8 +164,10 @@ function Bookings() {
 
 function Orders() {
   const [list] = useLoad('/admin/orders');
+  const PAY = { held: 'Paid (held)', released: 'Paid', refunded: 'Refunded', pay_on_delivery: 'Pay on delivery', collected: 'Collected' };
   return <div className="table-wrap"><table><tbody>{list?.map((o) => (
-    <tr key={o.id}><td>#{o.id} · {when(o.created_at)}</td><td>{o.buyer} → {o.farmer}</td><td>{o.quantity} {o.unit} {o.title}</td><td>{naira(o.total)}</td><td><span className={'badge ' + o.status}>{o.status}</span></td></tr>))}</tbody></table>
+    <tr key={o.id}><td>#{o.id} · {when(o.created_at)}</td><td>{o.buyer} → {o.farmer}</td><td>{o.quantity} {o.unit} {o.title}</td>
+      <td>{naira(o.total)}<br /><span className="muted small">incl. {naira(o.delivery_fee)} delivery</span></td><td><span className={'badge ' + o.status}>{o.status}</span><br /><span className="muted small">{PAY[o.payment_status]}</span></td></tr>))}</tbody></table>
     {list && !list.length && <p className="muted">No orders yet.</p>}</div>;
 }
 
@@ -199,7 +212,11 @@ function KycAdmin() {
     if (status === 'rejected') { note = window.prompt('Reason for rejecting (the user will see this):'); if (note === null) return; }
     await api(`/admin/kyc/${id}`, { method: 'PATCH', body: { status, note } }); reload();
   };
-  const reveal = async (id) => { const r = await api(`/admin/kyc/${id}/reveal`); window.alert(`BVN: ${r.bvn}\nID number: ${r.id_number}\n\nThis view has been logged.`); };
+  const reveal = async (id) => {
+    const r = await api(`/admin/kyc/${id}/reveal`);
+    const farms = (r.farms || []).map((f, i) => `  ${i + 1}. ${f.name}: ${f.address}, ${f.lga ? f.lga + ', ' : ''}${f.state}${f.size_ha ? ` (${f.size_ha} ha)` : ''}${f.latitude != null ? `\n     GPS ${f.latitude}, ${f.longitude}  https://www.google.com/maps?q=${f.latitude},${f.longitude}` : ''}`).join('\n');
+    window.alert(`BVN: ${r.bvn}\nID number: ${r.id_number}\nPhone: ${r.phone}\nHouse address: ${r.address}${farms ? `\n\nFarms:\n${farms}` : ''}\n\nThis view has been logged.`);
+  };
   return <div className="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>State</th><th>ID</th><th>BVN</th><th>Status</th><th></th></tr></thead><tbody>{list?.map((k) => (
     <tr key={k.user_id}><td>{k.name}<br /><span className="muted">{k.email}</span></td><td>{k.role}</td><td>{k.state}</td><td>{k.id_type} ••••{k.id_last4}</td><td>••••••{k.bvn_last4}</td>
       <td><span className={'badge ' + k.status}>{k.status}</span>{k.review_note && <><br /><span className="muted">{k.review_note}</span></>}</td>
@@ -226,14 +243,15 @@ function AssistanceAdmin() {
 
 function InvestmentsAdmin() {
   const [list, reload] = useLoad('/admin/investments');
-  const act = (id, action) => api(`/admin/investments/${id}`, { method: 'PATCH', body: { action } }).then(reload).catch((e) => window.alert(e.message));
+  const act = (id, action, text) => window.confirm(text) && api(`/admin/investments/${id}`, { method: 'PATCH', body: { action } }).then(reload).catch((e) => window.alert(e.message));
   return <>
-    <p className="muted">When an investor pays, click <b>Confirm payment</b>. That starts their countdown. After a plan matures, pay the investor and click <b>Mark paid</b>.</p>
+    <p className="muted">Investors pay from their wallets and the countdown starts straight away. When a plan matures, pay the investor into their wallet (principal + return), or click <b>Mark paid</b> if you paid them another way.</p>
     <div className="table-wrap"><table><thead><tr><th>Investor</th><th>Plan</th><th>Amount</th><th>Expected payout</th><th>Status</th><th></th></tr></thead><tbody>{list?.map((i) => (
       <tr key={i.id}><td>{i.investor}<br /><span className="muted">{when(i.created_at)}</span></td><td>{monthsLabel(i.duration_months)} at {i.rate_percent}%</td><td>{naira(i.amount)}</td><td>{naira(i.amount + i.expected_return)}</td>
         <td><span className={'badge ' + i.display_status}>{i.display_status}</span>{i.maturity_date && <><br /><span className="muted">Matures {when(i.maturity_date)}</span></>}</td>
-        <td className="row">{i.status === 'pending' && <><button className="btn" onClick={() => act(i.id, 'confirm')}>Confirm payment</button><button className="ghost" onClick={() => act(i.id, 'cancel')}>Cancel</button></>}
-          {i.status === 'active' && <button className="ghost" onClick={() => act(i.id, 'paid')}>Mark paid</button>}</td></tr>))}</tbody></table>
+        <td className="row">{i.display_status === 'matured' && <>
+          <button className="btn" onClick={() => act(i.id, 'wallet', `Pay ${naira(i.amount + i.expected_return)} into ${i.investor}'s wallet?`)}>Pay into wallet</button>
+          <button className="ghost" onClick={() => act(i.id, 'paid', 'Mark as paid (you paid them outside the app)?')}>Mark paid</button></>}</td></tr>))}</tbody></table>
       {list && !list.length && <p className="muted">No investments yet.</p>}</div></>;
 }
 
@@ -264,4 +282,65 @@ function PlansAdmin() {
       </div>
       <button className="btn">Add plan</button><Msg m={m} />
     </form></>;
+}
+
+function PayoutsAdmin() {
+  const [list, reload] = useLoad('/admin/payouts');
+  return <>
+    <p className="muted">When a buyer pays from their wallet and the farmer completes the order, the item price is owed to the farmer. Pay it to the account shown, then click <b>Mark paid</b>. The delivery fee stays with AgriConnect to cover delivery.</p>
+    <div className="table-wrap"><table><thead><tr><th>Order</th><th>Farmer</th><th>Pay to</th><th>Amount</th><th></th></tr></thead><tbody>{list?.map((p) => (
+      <tr key={p.id}><td>#{p.id} · {p.title}</td><td>{p.farmer}<br /><span className="muted small">{p.phone}</span></td>
+        <td>{p.account_number ? <>{p.bank_name}<br /><b>{p.account_number}</b><br /><span className="muted small">{p.account_name}</span></> : <span className="muted">No payout account yet</span>}</td>
+        <td>{naira(p.amount)}</td>
+        <td>{p.payout_status === 'pending' ? <button className="btn" onClick={() => window.confirm(`Mark ${naira(p.amount)} as paid to ${p.farmer}?`) && api(`/admin/payouts/${p.id}`, { method: 'PATCH', body: {} }).then(reload).catch((e) => window.alert(e.message))}>Mark paid</button> : <span className="badge paid">paid</span>}</td></tr>))}</tbody></table>
+      {list && !list.length && <p className="muted">Nothing to pay out.</p>}</div></>;
+}
+
+function WalletsAdmin() {
+  const [users] = useLoad('/admin/users');
+  const [txs, reload] = useLoad('/admin/wallet/transactions');
+  const [f, setF] = useState({ user_id: '', amount: '', note: '' });
+  const [m, setM] = useState(null);
+  const TX = { transfer_in: 'Money added', order_payment: 'Order payment', refund: 'Refund', investment: 'Investment', investment_payout: 'Investment payout', admin_credit: 'Admin credit' };
+  return <>
+    <form className="card" onSubmit={async (e) => {
+      e.preventDefault();
+      try { await api('/admin/wallet/credit', { method: 'POST', body: f }); setM({ ok: 'Wallet credited.' }); setF({ user_id: '', amount: '', note: '' }); reload(); } catch (er) { setM({ err: er.message }); }
+    }}>
+      <h3>Credit a wallet manually</h3>
+      <p className="muted small">For corrections or testing, for example if a transfer was received but did not appear. Every credit is recorded.</p>
+      <div className="row">
+        <label className="grow">Investor or buyer<select value={f.user_id} onChange={(e) => setF({ ...f, user_id: e.target.value })} required><option value="">Choose…</option>{users?.filter((u) => ['investor', 'buyer'].includes(u.role)).map((u) => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}</select></label>
+        <label className="grow">Amount (₦)<input type="number" min="1" step="any" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} required /></label>
+        <label className="grow">Note<input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></label>
+      </div>
+      <button className="btn">Credit wallet</button><Msg m={m} />
+    </form>
+    <h3>Recent wallet activity</h3>
+    <div className="table-wrap"><table><tbody>{txs?.map((t) => (
+      <tr key={t.id}><td>{when(t.created_at)}</td><td>{t.name} <span className="muted small">({t.role})</span></td><td>{TX[t.type] || t.type}<br /><span className="muted small">{t.description}</span></td>
+        <td className={t.amount < 0 ? 'neg' : 'pos'}>{t.amount < 0 ? '−' : '+'}{naira(Math.abs(t.amount))}</td></tr>))}</tbody></table>
+      {txs && !txs.length && <p className="muted">No wallet activity yet.</p>}</div></>;
+}
+
+function FeesAdmin() {
+  const [fees] = useLoad('/admin/fees');
+  const [f, setF] = useState(null);
+  const [m, setM] = useState(null);
+  const v = f || fees;
+  if (!v || Array.isArray(v)) return null;
+  return (
+    <form className="card" onSubmit={async (e) => {
+      e.preventDefault();
+      try { await api('/admin/fees', { method: 'PUT', body: v }); setM({ ok: 'Delivery fees saved.' }); } catch (er) { setM({ err: er.message }); }
+    }}>
+      <h3>Delivery fees (per order)</h3>
+      <p className="muted small">Added to the price when a buyer chooses delivery. Pickup is always free. The starting amounts are placeholders: set your real ones.</p>
+      <div className="row">
+        <label className="grow">Same state as the farmer (₦)<input type="number" min="0" value={v.same} onChange={(e) => setF({ ...v, same: e.target.value })} required /></label>
+        <label className="grow">Different state (₦)<input type="number" min="0" value={v.other} onChange={(e) => setF({ ...v, other: e.target.value })} required /></label>
+      </div>
+      <button className="btn">Save fees</button><Msg m={m} />
+    </form>
+  );
 }

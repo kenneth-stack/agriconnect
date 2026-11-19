@@ -38,7 +38,7 @@ export default function Home({ user, easy }) {
         <div className="chips">
           {cats.map((c) => <Link key={c.category} className={'chip' + (c.count ? '' : ' dim')} to={`/marketplace?category=${encodeURIComponent(c.category)}`}>{EMOJI[c.category]} {c.category} <b>{c.count}</b></Link>)}
         </div>
-        {stocked.length === 0 && <p className="muted"></p>}
+        {stocked.length === 0 && <p className="muted">Produce will appear here as soon as farmers start listing.</p>}
         {stocked.map((c) => (
           <div key={c.category} className="cat-block">
             <div className="cat-head"><h3>{EMOJI[c.category]} {c.category}</h3><Link to={`/marketplace?category=${encodeURIComponent(c.category)}`}>See all {c.count} →</Link></div>
@@ -70,11 +70,11 @@ export default function Home({ user, easy }) {
             <li>Sell directly and keep more of your income</li><li>Show your produce and farmland with photos</li>
             <li>Request seedlings, manure, land and other farm assistance</li><li>Hire tractors and drones instead of buying them</li><li>Keep a record of every sale you make</li></ul></div>
           <div className="card"><h3>💰 For investors</h3><ul>
-            <li>Choose a fixed-term plan from 12 months to 5 years</li><li>Watch a live countdown to your maturity date</li>
+            <li>Choose a fixed-term plan from 12 months to 5 years</li><li>Fund your wallet by bank transfer, then invest in one tap</li><li>Watch a live countdown to your maturity date</li>
             <li>See your amount, rate and expected payout at a glance</li><li>Track every investment in your history</li></ul></div>
           <div className="card"><h3>🛒 For buyers</h3><ul>
             <li>Buy fresh produce straight from the farm</li><li>Choose farmers in your own state</li>
-            <li>See photos and prices before you order</li><li>Track every order from request to delivery</li></ul></div>
+            <li>See photos and prices before you order</li><li>Pay now from your wallet, or pay on delivery</li><li>Track every order from request to delivery</li></ul></div>
         </div>
       </section>
 

@@ -1,6 +1,6 @@
 import multer from 'multer';
 import { HttpError } from './http.js';
-import { r2Enabled, putImage } from './storage.js';
+import { r2Enabled, putImage, deleteImage } from './storage.js';
 
 export const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 6 } });
 
@@ -22,4 +22,10 @@ export async function saveImages(q, files = [], m) {
       [m.owner_id ?? null, m.kind, m.listing_id ?? null, m.equipment_id ?? null, m.caption ?? null, types[i], key ? null : f.buffer, key]
     );
   }
+}
+
+// Deletes matching images and their files in R2. `where` is a fixed SQL condition written in our code, never user input.
+export async function purgeImages(q, where, params) {
+  const rows = await q(`DELETE FROM images WHERE ${where} RETURNING storage_key`, params);
+  if (r2Enabled()) for (const r of rows) if (r.storage_key) await deleteImage(r.storage_key).catch((e) => console.error('R2 delete failed', e.message));
 }

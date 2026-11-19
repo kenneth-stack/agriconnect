@@ -96,3 +96,10 @@ tbody tr:hover td { background: #f3f8f5; }
 .badge.active { background: #d6efdd; } .badge.matured { background: #fbeebf; } .badge.paid { background: #cfe6f5; } .badge.approved, .badge.verified { background: #d6efdd; } .badge.rejected { background: #f6d9d6; } .badge.submitted { background: #fbeebf; }
 
 .btn:disabled, .btn:disabled:hover { background: #9db3a6; cursor: not-allowed; }
+
+/* ---------- KYC banner, locked dashboard, farms, delete ---------- */
+a.banner { display: block; color: var(--ink); text-decoration: none; font-weight: 600; } a.banner:hover { background: #f6e196; color: var(--ink); }
+.path.off { opacity: .55; cursor: not-allowed; border-style: dashed; } .path.off:hover { background: #fff; transform: none; border-color: var(--leaf); }
+.danger { color: #b3261e !important; } .danger:hover { background: #f6d9d6 !important; border-color: #b3261e !important; }
+.farm-card { border: 1px solid var(--line); border-radius: 8px; padding: .8rem 1rem; display: flex; flex-direction: column; gap: .6rem; background: #fff; }
+.farm-card legend { font-weight: 700; padding: 0 .4rem; } .farm-list { padding-left: 1.2rem; }

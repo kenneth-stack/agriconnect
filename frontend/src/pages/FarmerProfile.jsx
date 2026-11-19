@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, img } from '../api.js';
 import ListingCard from '../components/ListingCard.jsx';
+import Avatar from '../components/Avatar.jsx';
 
 export default function FarmerProfile({ user }) {
   const { id } = useParams();
@@ -16,12 +17,13 @@ export default function FarmerProfile({ user }) {
   if (!f) return <p className="muted">Loading…</p>;
   return (
     <>
-      <h2>{f.name}</h2>
+      <div className="row who"><Avatar id={f.avatar_id} name={f.name} size={72} /><h2>{f.name}</h2></div>
       <p className="muted">📍 {f.state}{f.farm_size_ha ? ` · ${f.farm_size_ha} hectares` : ''}{f.main_crops ? ` · Grows ${f.main_crops}` : ''}</p>
       {f.about && <p>{f.about}</p>}
+      {f.farms?.length > 0 && <><h3>Farms</h3><ul className="farm-list">{f.farms.map((x) => <li key={x.id}><b>{x.name}</b> · {x.lga ? `${x.lga}, ` : ''}{x.state}{x.size_ha ? ` · ${x.size_ha} ha` : ''}{x.main_crops ? ` · ${x.main_crops}` : ''}</li>)}</ul></>}
       {f.photos.length > 0 && <><h3>Farm photos</h3><div className="gallery">{f.photos.map((p) => <img key={p.id} src={img(p.id)} alt={p.caption || `Farm of ${f.name}`} loading="lazy" />)}</div></>}
       <h3>Produce available</h3>
-      <div className="grid">{items.map((l) => <ListingCard key={l.id} l={l} user={user} />)}</div>
+      <div className="grid">{items.map((l) => <ListingCard key={l.id} l={l} user={user} onDeleted={() => setItems((x) => x.filter((i) => i.id !== l.id))} />)}</div>
       {!items.length && <p className="muted">Nothing listed right now.</p>}
     </>
   );

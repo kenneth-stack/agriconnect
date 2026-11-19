@@ -17,7 +17,7 @@ farmer, investor, buyer (public sign-up) and admin. The first admin comes from A
 admins add other admins in Admin portal > Admins.
 
 ## KYC
-Farmers, investors and buyers must submit a KYC profile (including BVN) before they can order, list produce, invest,
+New accounts land on the dashboard with a bar at the top ("Proceed to complete your KYC to have full access") and the dashboard stays locked until KYC is submitted. Farmers must also list their farms (several are allowed) with the farm address and, if possible, GPS coordinates captured from the phone. Exact GPS is visible only to the farmer and admins. Farmers, investors and buyers must submit a KYC profile (including BVN) before they can order, list produce, invest,
 request assistance or book equipment. BVN and ID numbers are stored encrypted (KYC_ENCRYPTION_KEY). Admins review profiles
 in Admin > KYC. The BVN is only checked for format (11 digits); it is NOT checked against NIBSS. To verify BVNs
 automatically, connect a licensed provider (e.g. Paystack, Dojah, Youverify) and call it in routes/kyc.js.
@@ -25,15 +25,26 @@ automatically, connect a licensed provider (e.g. Paystack, Dojah, Youverify) and
 ## Assistance / Funding
 Farmers request items (manure, seedlings, land, ...) with a quantity and description. Admins approve or reject in Admin > Assistance.
 
+## Wallets and account numbers (Paystack)
+Every investor and buyer gets a personal bank account number (a Paystack dedicated virtual account) once their KYC is in.
+Money transferred to it lands in their AgriConnect wallet automatically. Setup:
+1. Put your Paystack **secret key** in PAYSTACK_SECRET_KEY. With a test key set PAYSTACK_DVA_BANK=test-bank; live: wema-bank or titan-paystack.
+2. Ask Paystack to enable **Dedicated Accounts** on your business (they must approve it).
+3. In Paystack > Settings > API Keys & Webhooks, set the webhook URL to `https://YOUR-API.onrender.com/api/paystack/webhook`.
+Only bank transfers to a personal account number are credited; card payments and unknown accounts are ignored (and logged).
+Admins can correct or top up a wallet by hand in Admin > Wallets (every change needs a reason and is logged).
+Withdrawals from wallets are not built yet.
+
+## Paying for produce
+Buyers choose **Pay now** (from the wallet; the money is held until delivery) or **Pay on delivery**, and **Delivery** or **Pickup**.
+A delivery fee is added to the produce price (same state / other state, set in Admin > Fees). If a prepaid order is cancelled the buyer is refunded.
+When a prepaid order is completed the farmer is owed the produce price, and an admin pays the farmer's bank account (Admin > Payouts, using the
+payout account the farmer saved on their profile). Delivery fees stay with AgriConnect.
+
 ## Investment plans
-Investors can explore plans (12, 18, 24, 36, 48, 60 months) and see their expected return, but **payment is switched off**:
-the Invest button shows "Payment coming soon" and nothing is created (PAYMENTS_ENABLED=false, the default).
-When you connect Stripe, replace the body of POST /plans/:id/invest (backend/src/routes/plans.js) with the Stripe checkout
-and confirm the investment from Stripe's webhook, then set PAYMENTS_ENABLED=true.
-(With PAYMENTS_ENABLED=true and no Stripe, the app runs a manual flow: the investment starts "pending", an admin clicks
-Confirm payment in Admin > Investments to start the countdown, then Mark paid after payout.)
-The starting rates are PLACEHOLDERS: set real ones in Admin > Plans. Offering fixed returns to the public is regulated in
-Nigeria; get legal advice (SEC/CBN) first.
+Investors invest from their wallet into a plan (12, 18, 24, 36, 48 or 60 months). The countdown starts at once and is shown on their dashboard.
+After maturity an admin pays out principal + return into the wallet (Admin > Investments). The starting rates are PLACEHOLDERS: set real ones in
+Admin > Plans. Offering fixed returns to the public is regulated in Nigeria; get legal advice (SEC/CBN) first.
 
 ## Emails
 All email goes through one function, sendMail() in backend/src/mailer.js (Resend by default: RESEND_API_KEY + MAIL_FROM).
@@ -59,3 +70,8 @@ Two storage modes, chosen automatically:
 Payment escrow (Paystack/Flutterwave), identity verification (BVN/NIN), SEC/CBN compliance for investment features
 (get legal advice), NDPA data-protection consent, tests, backups, email/SMS notifications.
 Replace the contact line in the footer and the write-up on the home page (frontend/src/pages/Home.jsx) with your own details.
+
+## Deleting
+Farmers and admins can delete produce (with its photos; produce that has open orders cannot be deleted) and farm photos. Admins can also delete equipment
+and whole user accounts (Admin > Farmers & users): personal data, photos, KYC, farms and payout details are erased and the account is anonymised so other
+people's trade and wallet records stay correct. An account with wallet money, open orders, active investments or an unpaid payout cannot be deleted yet.

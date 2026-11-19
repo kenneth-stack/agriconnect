@@ -12,11 +12,10 @@ export function requireAuth(...roles) {
     } catch {
       throw new HttpError(401, 'Please log in to continue.');
     }
-    if (req.user.role === 'admin') {
-      // a token can outlive admin access, so confirm against the database
-      const u = await one('SELECT role FROM users WHERE id=$1', [req.user.id]);
-      if (u?.role !== 'admin') throw new HttpError(401, 'Your session is no longer valid. Please log in again.');
-    }
+    // a token can outlive the account or the admin role, so the database has the final say
+    const u = await one('SELECT role, deleted_at FROM users WHERE id=$1', [req.user.id]);
+    if (!u || u.deleted_at || (req.user.role === 'admin' && u.role !== 'admin')) throw new HttpError(401, 'Your session is no longer valid. Please log in again.');
+    req.user.role = u.role;
     if (roles.length && !roles.includes(req.user.role)) throw new HttpError(403, 'Your account type cannot do this.');
     next();
   };

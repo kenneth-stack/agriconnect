@@ -34,7 +34,7 @@ let metaCache;
 export function useMeta() {
   const [m, setM] = useState(metaCache);
   useEffect(() => { if (!metaCache) api('/meta').then((x) => { metaCache = x; setM(x); }).catch(() => {}); }, []);
-  return m || { categories: [], states: [], units: [], equipmentTypes: [], assistanceItems: [], assistanceUnits: [], idTypes: [], paymentNote: '', paymentsEnabled: false };
+  return m || { categories: [], states: [], units: [], equipmentTypes: [], assistanceItems: [], assistanceUnits: [], idTypes: [], deliveryFees: { same: 0, other: 0 }, paystackEnabled: false };
 }
 
 // Phone photos are huge: shrink to max 1600px JPEG before uploading

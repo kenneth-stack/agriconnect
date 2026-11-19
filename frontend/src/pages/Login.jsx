@@ -19,7 +19,7 @@ export default function Login({ onAuth }) {
       const { token, user } = await api(`/auth/${mode}`, { method: 'POST', body: f });
       session.save(token, user); onAuth(user);
       // everyone except admins must complete their KYC profile first
-      nav(user.role === 'admin' || ['submitted', 'verified'].includes(user.kyc) ? '/dashboard' : '/kyc');
+      nav('/dashboard'); // people without a KYC profile see a banner there asking them to complete it
     } catch (e2) { setErr(e2.message); }
   }
 

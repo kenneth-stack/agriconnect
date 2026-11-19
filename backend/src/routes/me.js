@@ -9,7 +9,7 @@ r.get('/me/history', requireAuth(), async (req, res) => {
   const uid = req.user.id;
   const [activity, orders, investments, assistance, bookings] = await Promise.all([
     query('SELECT id, action, detail, created_at FROM activity WHERE user_id=$1 ORDER BY id DESC LIMIT 100', [uid]),
-    query(`SELECT o.id, o.quantity, o.total, o.status, o.delivery_state, o.note, o.created_at, o.updated_at,
+    query(`SELECT o.id, o.quantity, o.total, o.items_total, o.delivery_fee, o.payment_method, o.payment_status, o.payout_status, o.fulfilment, o.status, o.delivery_state, o.note, o.created_at, o.updated_at,
         l.title, l.unit, b.name AS buyer, f.name AS farmer,
         CASE WHEN o.buyer_id = $1 THEN 'buying' ELSE 'selling' END AS side
       FROM orders o JOIN listings l ON l.id = o.listing_id JOIN users b ON b.id = o.buyer_id JOIN users f ON f.id = o.farmer_id

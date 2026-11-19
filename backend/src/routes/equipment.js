@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query, one, tx, logActivity } from '../db.js';
 import { requireAuth, needKyc } from '../auth.js';
-import { upload, saveImages } from '../upload.js';
+import { upload, saveImages, purgeImages } from '../upload.js';
 import { HttpError } from '../http.js';
 import { EQUIPMENT_TYPES } from '../meta.js';
 
@@ -30,7 +30,13 @@ r.post('/equipment', requireAuth('admin'), upload.array('images', 3), async (req
 });
 
 r.delete('/equipment/:id', requireAuth('admin'), async (req, res) => {
-  await query('UPDATE equipment SET active=false WHERE id=$1', [Number(req.params.id) || 0]);
+  const id = Number(req.params.id) || 0;
+  if (await one("SELECT 1 FROM bookings WHERE equipment_id=$1 AND status IN ('pending','confirmed') AND end_date >= CURRENT_DATE", [id]))
+    throw new HttpError(400, 'This equipment has upcoming bookings. Cancel them first.');
+  await tx(async (q) => {
+    await q('UPDATE equipment SET active=false WHERE id=$1', [id]);
+    await purgeImages(q, 'equipment_id=$1', [id]);
+  });
   res.json({ ok: true });
 });
 

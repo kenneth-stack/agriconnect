@@ -46,7 +46,7 @@ export default function Marketplace({ user }) {
         {categories.map((c) => <button key={c} role="tab" aria-selected={category === c} className={category === c ? 'tab on' : 'tab'} onClick={() => set('category', c)}>{EMOJI[c]} {c}</button>)}
       </div>
       {msg && <p className="error">{msg}</p>}
-      {!items.length && <p className="muted"></p>}
+      {!items.length && <p className="muted">No produce matches yet. Try another state, farmer or category.</p>}
       {groups.map(([c, list]) => (
         <section key={c}>
           <h3 className="cat-title">{EMOJI[c]} {c} <small>({list.length})</small></h3>

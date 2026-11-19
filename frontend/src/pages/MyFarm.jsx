@@ -23,6 +23,7 @@ export default function MyFarm({ user }) {
 
   const run = async (fn, ok) => { try { await fn(); setMsg({ ok }); load(); } catch (e) { setMsg({ err: e.message }); } };
   const setP = (k) => (e) => setProfile({ ...profile, [k]: e.target.value });
+  const del = (text, fn, ok) => window.confirm(text) && run(fn, ok);
 
   return (
     <>
@@ -49,7 +50,7 @@ export default function MyFarm({ user }) {
             <label>Caption (optional)<input value={caption} onChange={(e) => setCaption(e.target.value)} /></label>
             {files.length > 0 && <button className="btn">Upload {files.length} photo(s)</button>}
             <div className="gallery">{profile.photos.map((p) => (
-              <figure key={p.id}><img src={img(p.id)} alt={p.caption || 'Farm'} /><button className="ghost" onClick={() => run(() => api(`/images/${p.id}`, { method: 'DELETE' }), 'Photo removed.')}>Remove</button></figure>
+              <figure key={p.id}><img src={img(p.id)} alt={p.caption || 'Farm'} /><button type="button" className="ghost" onClick={() => del('Delete this photo? This cannot be undone.', () => api(`/images/${p.id}`, { method: 'DELETE' }), 'Photo deleted.')}>Delete</button></figure>
             ))}</div>
           </form>
         </div>
@@ -60,7 +61,7 @@ export default function MyFarm({ user }) {
       <div className="table-wrap"><table><tbody>
         {orders.map((o) => (
           <tr key={o.id}>
-            <td>#{o.id} · {when(o.created_at)}</td><td>{o.buyer} wants {o.quantity} {o.unit} of {o.title}</td><td>{naira(o.total)}</td>
+            <td>#{o.id} · {when(o.created_at)}</td><td>{o.buyer} wants {o.quantity} {o.unit} of {o.title}</td><td>{naira(o.total)}<br /><span className="muted small">{{ held: 'Paid, held until delivery', released: 'Paid', refunded: 'Refunded', collected: 'Collected on delivery' }[o.payment_status] || 'Collect on delivery'}{o.fulfilment === 'pickup' ? ' · pickup' : ''}</span></td>
             <td><span className={'badge ' + o.status}>{o.status}</span></td>
             <td className="row">
               {o.status === 'pending' && <button className="btn" onClick={() => run(() => api(`/orders/${o.id}/status`, { method: 'PATCH', body: { status: 'confirmed' } }), 'Order confirmed.')}>Confirm</button>}
@@ -74,8 +75,12 @@ export default function MyFarm({ user }) {
       <h3>My produce on sale</h3>
       <div className="table-wrap"><table><tbody>
         {listings.map((l) => (
-          <tr key={l.id}><td>{l.title}</td><td>{l.category}</td><td>{l.quantity} {l.unit}</td><td>{naira(l.price)}</td>
-            <td><button className="ghost" onClick={() => run(() => api(`/listings/${l.id}`, { method: 'DELETE' }), 'Listing removed.')}>Remove</button></td></tr>
+          <tr key={l.id}>
+            <td><div className="thumbs">{(l.image_ids || []).map((id) => (
+              <span className="thumb" key={id}><img src={img(id)} alt={l.title} /><button type="button" aria-label="Delete this photo" onClick={() => del('Delete this photo?', () => api(`/images/${id}`, { method: 'DELETE' }), 'Photo deleted.')}>×</button></span>
+            ))}</div></td>
+            <td><b>{l.title}</b><br /><span className="muted small">{l.category}</span></td><td>{l.quantity} {l.unit}</td><td>{naira(l.price)}</td>
+            <td><button className="ghost" onClick={() => del(`Delete "${l.title}" and all its photos? This cannot be undone.`, () => api(`/listings/${l.id}`, { method: 'DELETE' }), 'Produce deleted.')}>Delete</button></td></tr>
         ))}
       </tbody></table></div>
     </>

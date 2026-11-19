@@ -5,17 +5,18 @@ import { query, one, logActivity } from '../db.js';
 import { sign, requireAuth } from '../auth.js';
 import { HttpError } from '../http.js';
 import { sendMail, sendWelcome } from '../mailer.js';
+import { getFees } from '../settings.js';
+import { paystackEnabled } from '../paystack.js';
 import { STATES, CATEGORIES, UNITS, EQUIPMENT_TYPES, ASSISTANCE_ITEMS, ASSISTANCE_UNITS, ID_TYPES } from '../meta.js';
 
 const r = Router();
 const sha = (t) => crypto.createHash('sha256').update(t).digest('hex');
 const kycStatus = async (id) => (await one('SELECT status FROM kyc WHERE user_id=$1', [id]))?.status || 'none';
 
-r.get('/meta', (_q, res) => res.json({
+r.get('/meta', async (_q, res) => res.json({
   categories: CATEGORIES, states: STATES, units: UNITS, equipmentTypes: EQUIPMENT_TYPES,
   assistanceItems: ASSISTANCE_ITEMS, assistanceUnits: ASSISTANCE_UNITS, idTypes: ID_TYPES,
-  paymentsEnabled: process.env.PAYMENTS_ENABLED === 'true',
-  paymentNote: process.env.PAYMENT_INSTRUCTIONS || 'Payment details will be shared by our team once you submit your investment.'
+  deliveryFees: await getFees(), paystackEnabled: paystackEnabled()
 }));
 
 r.post('/auth/register', async (req, res) => {
@@ -31,7 +32,7 @@ r.post('/auth/register', async (req, res) => {
       'INSERT INTO users (name,email,password_hash,role,phone,state,language) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
       [name, mail, bcrypt.hashSync(password, 10), role, phone || null, state || null, language]);
     await logActivity(query, u.id, 'registered', `Joined AgriConnect as ${role}`);
-    const user = { id: u.id, name, email: mail, role, state: state || null, kyc: 'none' };
+    const user = { id: u.id, name, email: mail, role, state: state || null, kyc: 'none', avatar: null };
     sendWelcome({ name, email: mail, role }).catch(() => {}); // fire and forget
     res.status(201).json({ token: sign(user), user });
   } catch (e) {
@@ -44,7 +45,7 @@ r.post('/auth/login', async (req, res) => {
   const u = await one('SELECT * FROM users WHERE email=$1', [(req.body.email || '').toLowerCase().trim()]);
   if (!u || !bcrypt.compareSync(req.body.password || '', u.password_hash)) throw new HttpError(401, 'Email or password is wrong.');
   await logActivity(query, u.id, 'login', 'Signed in');
-  res.json({ token: sign(u), user: { id: u.id, name: u.name, email: u.email, role: u.role, state: u.state, kyc: await kycStatus(u.id) } });
+  res.json({ token: sign(u), user: { id: u.id, name: u.name, email: u.email, role: u.role, state: u.state, kyc: await kycStatus(u.id), avatar: (await one("SELECT id FROM images WHERE owner_id=$1 AND kind='avatar' ORDER BY id DESC LIMIT 1", [u.id]))?.id || null } });
 });
 
 r.post('/auth/change-password', requireAuth(), async (req, res) => {

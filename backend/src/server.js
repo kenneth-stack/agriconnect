@@ -16,6 +16,9 @@ import ai from './routes/ai.js';
 import kyc from './routes/kyc.js';
 import assistance from './routes/assistance.js';
 import plans, { ensurePlans } from './routes/plans.js';
+import wallet from './routes/wallet.js';
+import profile from './routes/profile.js';
+import { ensureSettings } from './settings.js';
 
 if (!process.env.JWT_SECRET) throw new Error('Set JWT_SECRET in backend/.env');
 
@@ -24,10 +27,10 @@ app.set('trust proxy', 1); // Render sits behind a proxy
 // cross-origin resource policy lets the separate frontend site display uploaded photos
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',') }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } })); // raw body is needed to check Paystack's signature
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 40 }));
 app.use('/api/ai', rateLimit({ windowMs: 60 * 1000, limit: 15 }));
-app.use('/api', auth, market, trade, equipment, me, admin, ai, kyc, assistance, plans);
+app.use('/api', auth, market, trade, equipment, me, admin, ai, kyc, assistance, plans, wallet, profile);
 app.get('/health', (_q, r) => r.json({ ok: true }));
 
 app.use((err, _req, res, _next) => {
@@ -42,4 +45,5 @@ app.use((err, _req, res, _next) => {
 await initDb();
 await ensureAdmin();
 await ensurePlans();
+await ensureSettings();
 app.listen(process.env.PORT || 4000, () => console.log('AgriConnect API running'));

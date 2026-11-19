@@ -2,8 +2,13 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { query, one, logActivity } from '../db.js';
 import { requireAuth } from '../auth.js';
+import { purgeImages } from '../upload.js';
 import { HttpError } from '../http.js';
 import { decrypt } from '../secure.js';
+import { tx } from '../db.js';
+import { settleInvestment } from '../investments.js';
+import { moveMoney } from '../wallet.js';
+import { getFees } from '../settings.js';
 import { STATES } from '../meta.js';
 
 const r = Router();
@@ -22,7 +27,7 @@ r.get('/admin/overview', async (_q, res) => {
 });
 
 r.get('/admin/users', async (_q, res) =>
-  res.json(await query('SELECT id, name, email, phone, role, state, created_at FROM users ORDER BY id DESC LIMIT 500')));
+  res.json(await query('SELECT id, name, email, phone, role, state, created_at FROM users WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 500')));
 
 // Register a farmer on their behalf (e.g. a farmer without a smartphone)
 r.post('/admin/farmers', async (req, res) => {
@@ -71,7 +76,7 @@ r.get('/admin/activity', async (_q, res) =>
   res.json(await query('SELECT a.id, a.action, a.detail, a.created_at, u.name, u.role FROM activity a JOIN users u ON u.id = a.user_id ORDER BY a.id DESC LIMIT 200')));
 
 r.get('/admin/orders', async (_q, res) =>
-  res.json(await query(`SELECT o.id, o.quantity, o.total, o.status, o.created_at, l.title, l.unit, b.name AS buyer, f.name AS farmer
+  res.json(await query(`SELECT o.id, o.quantity, o.total, o.delivery_fee, o.payment_method, o.payment_status, o.status, o.created_at, l.title, l.unit, b.name AS buyer, f.name AS farmer
     FROM orders o JOIN listings l ON l.id=o.listing_id JOIN users b ON b.id=o.buyer_id JOIN users f ON f.id=o.farmer_id ORDER BY o.id DESC LIMIT 200`)));
 
 r.get('/admin/bookings', async (_q, res) =>
@@ -93,10 +98,12 @@ r.get('/admin/kyc', async (_q, res) =>
 
 // Full BVN / ID number, for checking with your verification provider. Every view is logged.
 r.get('/admin/kyc/:userId/reveal', async (req, res) => {
-  const k = await one('SELECT bvn_enc, id_number_enc FROM kyc WHERE user_id=$1', [Number(req.params.userId) || 0]);
+  const id = Number(req.params.userId) || 0;
+  const k = await one('SELECT bvn_enc, id_number_enc, address, phone FROM kyc WHERE user_id=$1', [id]);
   if (!k) throw new HttpError(404, 'No KYC profile.');
-  await logActivity(query, req.user.id, 'viewed_kyc', `Viewed full KYC details of user #${req.params.userId}`);
-  res.json({ bvn: decrypt(k.bvn_enc), id_number: decrypt(k.id_number_enc) });
+  const farms = await query('SELECT name, address, state, lga, size_ha, main_crops, latitude, longitude FROM farms WHERE user_id=$1 ORDER BY id', [id]);
+  await logActivity(query, req.user.id, 'viewed_kyc', `Viewed full KYC details of user #${id}`);
+  res.json({ bvn: decrypt(k.bvn_enc), id_number: decrypt(k.id_number_enc), address: k.address, phone: k.phone, farms });
 });
 
 r.patch('/admin/kyc/:userId', async (req, res) => {
@@ -146,19 +153,56 @@ r.get('/admin/investments', async (_q, res) =>
       CASE WHEN i.status = 'active' AND i.maturity_date <= now() THEN 'matured' ELSE i.status END AS display_status
     FROM plan_investments i JOIN users u ON u.id = i.investor_id ORDER BY (i.status = 'pending') DESC, i.id DESC LIMIT 300`)));
 
-const INV_ACTIONS = {
-  confirm: ["status='active', start_date=now(), maturity_date=now() + (duration_months * interval '1 month')", 'pending', 'confirmed: your countdown has started'],
-  cancel: ["status='cancelled'", 'pending', 'cancelled'],
-  paid: ["status='paid'", 'active', 'paid out']
-};
+// After a plan matures: pay the investor into their wallet, or mark it paid if you paid them outside the app.
 r.patch('/admin/investments/:id', async (req, res) => {
-  const a = INV_ACTIONS[req.body.action];
-  if (!a) throw new HttpError(400, 'Invalid action.');
-  const i = await one(`UPDATE plan_investments SET ${a[0]} WHERE id=$1 AND status=$2 RETURNING investor_id, amount, duration_months`, [Number(req.params.id) || 0, a[1]]);
-  if (!i) throw new HttpError(400, 'That change is not allowed for this investment.');
-  await logActivity(query, i.investor_id, `investment_${req.body.action}`, `Your ₦${i.amount.toLocaleString('en-NG')} ${i.duration_months}-month investment was ${a[2]}`);
+  if (!['wallet', 'paid'].includes(req.body.action)) throw new HttpError(400, 'Invalid action.');
+  await tx(async (q) => {
+    const i = await settleInvestment(q, Number(req.params.id) || 0, req.body.action);
+    await logActivity(q, i.investor_id, 'investment_paid', `Your ${i.duration_months}-month investment was paid out${req.body.action === 'wallet' ? ' to your wallet' : ''}`);
+  });
   res.json({ ok: true });
 });
+
+/* Farmer payouts for prepaid orders */
+r.get('/admin/payouts', async (_q, res) =>
+  res.json(await query(`SELECT o.id, COALESCE(o.items_total, o.total) AS amount, o.payout_status, o.updated_at, l.title, f.name AS farmer, f.phone,
+      p.bank_name, p.account_number, p.account_name
+    FROM orders o JOIN listings l ON l.id = o.listing_id JOIN users f ON f.id = o.farmer_id LEFT JOIN payout_accounts p ON p.user_id = f.id
+    WHERE o.payment_status = 'released' ORDER BY (o.payout_status = 'pending') DESC, o.id DESC LIMIT 300`)));
+
+r.patch('/admin/payouts/:id', async (req, res) => {
+  const o = await one("UPDATE orders SET payout_status='paid' WHERE id=$1 AND payout_status='pending' RETURNING farmer_id, COALESCE(items_total, total) AS amount", [Number(req.params.id) || 0]);
+  if (!o) throw new HttpError(400, 'Nothing to pay out for this order.');
+  await logActivity(query, o.farmer_id, 'payout_sent', `Payout of ₦${o.amount.toLocaleString('en-NG')} for order #${req.params.id} was sent`);
+  res.json({ ok: true });
+});
+
+/* Delivery fees */
+r.get('/admin/fees', async (_q, res) => res.json(await getFees()));
+r.put('/admin/fees', async (req, res) => {
+  const same = Number(req.body.same), other = Number(req.body.other);
+  if (!(same >= 0) || !(other >= 0)) throw new HttpError(400, 'Enter both delivery fees.');
+  for (const [k, v] of [['delivery_same_state', same], ['delivery_other_state', other]])
+    await query('INSERT INTO settings (key,value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value=$2', [k, String(v)]);
+  res.json({ ok: true });
+});
+
+/* Wallets */
+r.post('/admin/wallet/credit', async (req, res) => {
+  const amount = Number(req.body.amount);
+  if (!(amount > 0)) throw new HttpError(400, 'Enter an amount above zero.');
+  const u = await one("SELECT id, name FROM users WHERE id=$1 AND role IN ('investor','buyer')", [Number(req.body.user_id) || 0]);
+  if (!u) throw new HttpError(404, 'Choose an investor or buyer.');
+  await tx(async (q) => {
+    await moveMoney(q, u.id, amount, 'admin_credit', req.body.note?.trim() || 'Credited by admin');
+    await logActivity(q, u.id, 'wallet_credit', `Wallet credited with ₦${amount.toLocaleString('en-NG')} by AgriConnect`);
+    await logActivity(q, req.user.id, 'wallet_credit_given', `Credited ₦${amount.toLocaleString('en-NG')} to ${u.name}`);
+  });
+  res.json({ ok: true });
+});
+r.get('/admin/wallet/transactions', async (_q, res) =>
+  res.json(await query(`SELECT t.id, t.type, t.amount, t.balance_after, t.description, t.created_at, u.name, u.role
+    FROM wallet_transactions t JOIN users u ON u.id = t.user_id ORDER BY t.id DESC LIMIT 200`)));
 
 // Help someone who cannot reset by email: set a temporary password (not for other admins)
 r.patch('/admin/users/:id/password', async (req, res) => {
@@ -166,6 +210,31 @@ r.patch('/admin/users/:id/password', async (req, res) => {
   const u = await one("UPDATE users SET password_hash=$1 WHERE id=$2 AND role <> 'admin' RETURNING email", [bcrypt.hashSync(req.body.password, 10), Number(req.params.id) || 0]);
   if (!u) throw new HttpError(404, 'User not found.');
   await logActivity(query, req.user.id, 'set_password', `Set a temporary password for ${u.email}`);
+  res.json({ ok: true });
+});
+
+// Deletes an account: personal data, photos, KYC, farms and payout details are erased. The account itself is anonymised
+// (not removed) so trade and wallet records of other people stay consistent.
+r.delete('/admin/users/:id', async (req, res) => {
+  const id = Number(req.params.id) || 0;
+  if (id === req.user.id) throw new HttpError(400, 'You cannot delete your own account.');
+  const u = await one('SELECT id, name, email, role FROM users WHERE id=$1 AND deleted_at IS NULL', [id]);
+  if (!u) throw new HttpError(404, 'User not found.');
+  if (u.role === 'admin') throw new HttpError(400, 'Remove their admin access first (Admins tab), then delete the account.');
+  const bal = (await one('SELECT balance FROM wallets WHERE user_id=$1', [id]))?.balance || 0;
+  if (bal > 0.009) throw new HttpError(400, `This user still has ₦${bal.toLocaleString('en-NG')} in their wallet. Settle it first (Wallets).`);
+  const open = await one(`SELECT (SELECT COUNT(*)::int FROM orders WHERE (buyer_id=$1 OR farmer_id=$1) AND status IN ('pending','confirmed')) AS orders,
+    (SELECT COUNT(*)::int FROM orders WHERE farmer_id=$1 AND payout_status='pending') AS payouts,
+    (SELECT COUNT(*)::int FROM plan_investments WHERE investor_id=$1 AND status IN ('pending','active')) AS investments`, [id]);
+  if (open.orders || open.investments) throw new HttpError(400, 'This user has open orders or active investments. Finish or cancel them first.');
+  if (open.payouts) throw new HttpError(400, 'This farmer is still owed a payout. Pay it first (Payouts).');
+  await tx(async (q) => {
+    await purgeImages(q, 'owner_id=$1', [id]);
+    for (const t of ['kyc', 'farms', 'farmer_profiles', 'password_resets', 'payout_accounts', 'virtual_accounts']) await q(`DELETE FROM ${t} WHERE user_id=$1`, [id]);
+    await q("UPDATE listings SET status='removed' WHERE seller_id=$1", [id]);
+    await q("UPDATE users SET name='Deleted user', email=$1, password_hash='!', phone=NULL, state=NULL, deleted_at=now() WHERE id=$2", [`deleted-${id}@deleted.invalid`, id]);
+    await logActivity(q, req.user.id, 'deleted_user', `Deleted the account of ${u.name} (${u.email})`);
+  });
   res.json({ ok: true });
 });
 

@@ -22,7 +22,7 @@ const kycOk = (u) => u.role === 'admin' || ['submitted', 'verified'].includes(u.
 // Signed-in pages: send visitors to log in, and people without a KYC profile to complete it first
 function Gate({ user, children }) {
   if (!user) return <Navigate to="/login" />;
-  return kycOk(user) ? children : <Navigate to="/kyc" />;
+  return kycOk(user) ? children : <Navigate to="/dashboard" />;
 }
 
 export default function App() {
@@ -67,7 +67,7 @@ export default function App() {
         </div>
       </header>
       {user && !kycOk(user) && pathname !== '/kyc' && (
-        <div className="banner">Complete your KYC profile to start buying, selling, investing or requesting assistance. <Link to="/kyc">Complete it now</Link></div>
+        <Link to="/kyc" className="banner">Proceed to complete your KYC to have full access →</Link>
       )}
       <main>
         <Routes>
@@ -76,7 +76,7 @@ export default function App() {
           <Route path="/farmers/:id" element={<FarmerProfile user={user} />} />
           <Route path="/investment" element={<Invest user={user} />} />
           <Route path="/equipment" element={<Equipment user={user} />} />
-          <Route path="/dashboard" element={<Gate user={user}><Dashboard user={user} /></Gate>} />
+          <Route path="/dashboard" element={<Dashboard user={user} />} />
           <Route path="/my-farm" element={<Gate user={user}><MyFarm user={user} /></Gate>} />
           <Route path="/assistance" element={<Gate user={user}><Assistance user={user} /></Gate>} />
           <Route path="/history" element={<Gate user={user}><History user={user} /></Gate>} />

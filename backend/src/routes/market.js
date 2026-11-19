@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query, one, tx, logActivity } from '../db.js';
 import { requireAuth, needKyc } from '../auth.js';
-import { upload, saveImages } from '../upload.js';
+import { upload, saveImages, purgeImages } from '../upload.js';
 import { HttpError } from '../http.js';
 import { r2Enabled, getImage, deleteImage, publicUrl } from '../storage.js';
 import { CATEGORIES, UNITS } from '../meta.js';
@@ -11,7 +11,8 @@ const r = Router();
 const LIST_SQL = `
 SELECT l.id, l.title, l.category, l.description, l.quantity, l.unit, l.price, l.created_at,
        u.id AS farmer_id, u.name AS farmer, u.state,
-       (SELECT id FROM images i WHERE i.listing_id = l.id ORDER BY i.id LIMIT 1) AS image_id
+       (SELECT id FROM images i WHERE i.listing_id = l.id ORDER BY i.id LIMIT 1) AS image_id,
+       (SELECT COALESCE(json_agg(i.id ORDER BY i.id), '[]'::json) FROM images i WHERE i.listing_id = l.id) AS image_ids
 FROM listings l JOIN users u ON u.id = l.seller_id
 WHERE l.status = 'available' AND l.quantity > 0
   AND ($1::text IS NULL OR u.state = $1) AND ($2::text IS NULL OR l.category = $2)
@@ -54,8 +55,10 @@ r.get('/farmers', async (req, res) => {
 
 r.get('/farmers/:id', async (req, res) => {
   const f = await one(`SELECT u.id, u.name, u.state, p.farm_size_ha, p.main_crops, p.about
-    FROM users u LEFT JOIN farmer_profiles p ON p.user_id = u.id WHERE u.id=$1 AND u.role='farmer'`, [Number(req.params.id) || 0]);
+    FROM users u LEFT JOIN farmer_profiles p ON p.user_id = u.id WHERE u.id=$1 AND u.role='farmer' AND u.deleted_at IS NULL`, [Number(req.params.id) || 0]);
   if (!f) throw new HttpError(404, 'Farmer not found.');
+  f.avatar_id = (await one("SELECT id FROM images WHERE owner_id=$1 AND kind='avatar' ORDER BY id DESC LIMIT 1", [f.id]))?.id || null;
+  f.farms = await query('SELECT id, name, state, lga, size_ha, main_crops FROM farms WHERE user_id=$1 ORDER BY id', [f.id]); // no GPS in public
   f.photos = await query("SELECT id, caption FROM images WHERE owner_id=$1 AND kind='farmland' ORDER BY id DESC", [f.id]);
   res.json(f);
 });
@@ -101,8 +104,13 @@ r.delete('/listings/:id', requireAuth('farmer', 'admin'), async (req, res) => {
   const l = await one('SELECT id, seller_id, title FROM listings WHERE id=$1', [Number(req.params.id) || 0]);
   if (!l) throw new HttpError(404, 'Listing not found.');
   if (req.user.role !== 'admin' && l.seller_id !== req.user.id) throw new HttpError(403, 'This is not your listing.');
-  await query("UPDATE listings SET status='removed' WHERE id=$1", [l.id]);
-  await logActivity(query, l.seller_id, 'removed_produce', `Removed listing: ${l.title}`);
+  if (await one("SELECT 1 FROM orders WHERE listing_id=$1 AND status IN ('pending','confirmed')", [l.id]))
+    throw new HttpError(400, 'This produce has open orders. Complete or cancel them first.');
+  await tx(async (q) => {
+    await q("UPDATE listings SET status='removed' WHERE id=$1", [l.id]); // order history keeps the record; the photos are deleted
+    await purgeImages(q, 'listing_id=$1', [l.id]);
+    await logActivity(q, l.seller_id, 'removed_produce', `Deleted listing: ${l.title}`);
+  });
   res.json({ ok: true });
 });
 

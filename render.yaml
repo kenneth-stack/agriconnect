@@ -27,12 +27,12 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY       # optional: leave empty and the AI page shows 'coming soon'
         sync: false
+      - key: PAYSTACK_SECRET_KEY     # your Paystack secret key: gives each investor and buyer a personal account number
+        sync: false
+      - key: PAYSTACK_DVA_BANK       # test-bank with a TEST key; wema-bank or titan-paystack when live
+        value: wema-bank
       - key: KYC_ENCRYPTION_KEY      # encrypts BVN/ID numbers; generated once, never change it
         generateValue: true
-      - key: PAYMENTS_ENABLED        # keep "false" until Stripe is connected: investing shows "coming soon"
-        value: "false"
-      - key: PAYMENT_INSTRUCTIONS    # only used when PAYMENTS_ENABLED=true (manual bank-transfer mode)
-        sync: false
       - key: RESEND_API_KEY          # optional: sends forgot-password emails (resend.com)
         sync: false
       - key: MAIL_FROM               # e.g. AgriConnect <noreply@your-domain.com>

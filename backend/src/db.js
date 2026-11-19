@@ -76,6 +76,33 @@ CREATE TABLE IF NOT EXISTS password_resets (
   expires_at TIMESTAMPTZ NOT NULL, used_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS resets_hash ON password_resets(token_hash);
+CREATE TABLE IF NOT EXISTS wallets (
+  user_id INT PRIMARY KEY REFERENCES users(id), balance DOUBLE PRECISION NOT NULL DEFAULT 0 CHECK (balance >= 0)
+);
+CREATE TABLE IF NOT EXISTS virtual_accounts (
+  user_id INT PRIMARY KEY REFERENCES users(id), account_number TEXT UNIQUE NOT NULL, account_name TEXT, bank_name TEXT,
+  paystack_customer_code TEXT, created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS wallet_transactions (
+  id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id), type TEXT NOT NULL, amount DOUBLE PRECISION NOT NULL,
+  balance_after DOUBLE PRECISION NOT NULL, description TEXT, reference TEXT UNIQUE, created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS wtx_user ON wallet_transactions(user_id);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS payout_accounts (
+  user_id INT PRIMARY KEY REFERENCES users(id), bank_name TEXT, account_number TEXT, account_name TEXT
+);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS items_total DOUBLE PRECISION;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_fee DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'pod';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pay_on_delivery';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS fulfilment TEXT NOT NULL DEFAULT 'delivery';
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payout_status TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS farms (
+  id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id), name TEXT, address TEXT NOT NULL, state TEXT NOT NULL, lga TEXT,
+  size_ha DOUBLE PRECISION, main_crops TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, created_at TIMESTAMPTZ DEFAULT now()
+);
 ALTER TABLE images ALTER COLUMN data DROP NOT NULL;
 ALTER TABLE images ADD COLUMN IF NOT EXISTS storage_key TEXT;
 `;
@@ -94,7 +121,7 @@ export async function initDb() {
     const { PGlite } = await import('@electric-sql/pglite');
     lite = new PGlite(process.env.PGLITE_DIR || './.pgdata');
     await lite.exec(SCHEMA);
-    console.log('No DATABASE_URL set: using embedded local Postgres in ./.pgdata');
+    console.log('No DATABASE_URL set: using embedded local Postgres in '+(process.env.PGLITE_DIR || './.pgdata')+'');
   }
 }
 

@@ -19,6 +19,7 @@ export default function History({ user }) {
     ['bookings', `Equipment (${h.bookings.length})`], ['activity', 'All activity']
   ];
   const Empty = ({ n }) => (n ? null : <p className="muted">Nothing here yet.</p>);
+  const PAY = { held: 'Paid, held until delivery', released: 'Paid', refunded: 'Refunded', pay_on_delivery: 'Pay on delivery', collected: 'Paid on delivery' };
   const Badge = ({ s }) => <span className={'badge ' + s}>{s}</span>;
 
   return (
@@ -27,7 +28,7 @@ export default function History({ user }) {
       <div className="tabs" role="tablist">{tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'tab on' : 'tab'} onClick={() => setTab(k)}>{l}</button>)}</div>
       <div className="table-wrap">
         {tab === 'trades' && <><Empty n={h.orders.length} /><table><tbody>{h.orders.map((o) => (
-          <tr key={o.id}><td>{when(o.created_at)}</td><td>{o.side === 'buying' ? `Bought from ${o.farmer}` : `Sold to ${o.buyer}`}</td><td>{o.quantity} {o.unit} {o.title}</td><td>{naira(o.total)}</td><td><Badge s={o.status} /></td></tr>))}</tbody></table></>}
+          <tr key={o.id}><td>{when(o.created_at)}</td><td>{o.side === 'buying' ? `Bought from ${o.farmer}` : `Sold to ${o.buyer}`}</td><td>{o.quantity} {o.unit} {o.title}</td><td>{naira(o.total)}<br /><span className="muted small">{o.delivery_fee > 0 ? `incl. ${naira(o.delivery_fee)} delivery` : o.fulfilment === 'pickup' ? 'pickup' : ''}</span></td><td><Badge s={o.status} /><br /><span className="muted small">{PAY[o.payment_status]}</span></td></tr>))}</tbody></table></>}
         {tab === 'investments' && <><Empty n={h.investments.length} /><table><tbody>{h.investments.map((i) => (
           <tr key={i.id}><td>{when(i.created_at)}</td><td>{monthsLabel(i.duration_months)} at {i.rate_percent}%</td><td>{naira(i.amount)}</td><td>{i.maturity_date ? `Matures ${when(i.maturity_date)}` : 'Not started'}</td><td><Badge s={i.display_status} /></td></tr>))}</tbody></table></>}
         {tab === 'assistance' && <><Empty n={h.assistance.length} /><table><tbody>{h.assistance.map((a) => (
