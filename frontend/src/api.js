@@ -52,3 +52,14 @@ export function shrink(file, max = 1600) {
     im.src = url;
   });
 }
+
+// Opens a private image (an ID card) in a new tab. It needs the login token, so a plain <img> cannot be used.
+export async function openPrivateImage(path) {
+  const w = window.open('', '_blank'); // opened first so pop-up blockers allow it
+  try {
+    const res = await fetch(BASE + '/api' + path, { headers: { Authorization: 'Bearer ' + session.token } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Could not load the image.');
+    const url = URL.createObjectURL(await res.blob());
+    if (w) w.location = url; else window.open(url, '_blank');
+  } catch (e) { w?.close(); window.alert(e.message); }
+}

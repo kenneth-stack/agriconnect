@@ -54,10 +54,10 @@ export default function Profile({ user, onChange }) {
             {p.role !== 'investor' && p.role !== 'admin' && <label>State<select value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} required><option value="">Choose…</option>{states.map((s) => <option key={s}>{s}</option>)}</select></label>}
             <button className="btn">Save</button>
           </form>
-          {p.role === 'farmer' && (
+          {p.role !== 'admin' && (
             <form className="card" onSubmit={(e) => { e.preventDefault(); run(() => api('/profile/payout', { method: 'PUT', body: pay }), 'Payout account saved.'); }}>
-              <h3>Payout account</h3>
-              <p className="muted small">When a buyer pays from their wallet, AgriConnect sends your money to this account after delivery.</p>
+              <h3>{p.role === 'farmer' ? 'Payout account' : 'Withdrawal account'}</h3>
+              <p className="muted small">{p.role === 'farmer' ? 'When a buyer pays from their wallet, AgriConnect sends your money to this account after delivery.' : 'Money you withdraw from your wallet is sent to this account.'}</p>
               <label>Bank<input value={pay.bank_name || ''} onChange={(e) => setPay({ ...pay, bank_name: e.target.value })} required /></label>
               <label>Account number (10 digits)<input inputMode="numeric" maxLength={10} value={pay.account_number || ''} onChange={(e) => setPay({ ...pay, account_number: e.target.value })} required /></label>
               <label>Account name<input value={pay.account_name || ''} onChange={(e) => setPay({ ...pay, account_name: e.target.value })} required /></label>

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query, one, tx, logActivity } from '../db.js';
 import { requireAuth, needKyc } from '../auth.js';
+import { upload, saveImages, purgeImages, sendIdCard } from '../upload.js';
 import { HttpError } from '../http.js';
 import { encrypt } from '../secure.js';
 import { STATES, ID_TYPES } from '../meta.js';
@@ -31,10 +32,24 @@ async function saveFarms(q, userId, farms) {
     [userId, f.name, f.address, f.state, f.lga, f.size, f.crops, f.lat, f.lng]);
 }
 
+// Photo of the person's ID card. Private: only the owner and admins can ever see it.
+r.post('/kyc/id-card', requireAuth('farmer', 'investor', 'buyer'), upload.single('image'), async (req, res) => {
+  if (!req.file) throw new HttpError(400, 'Choose a photo of your ID card.');
+  if ((await one('SELECT status FROM kyc WHERE user_id=$1', [req.user.id]))?.status === 'verified') throw new HttpError(400, 'Your profile is already verified.');
+  await tx(async (q) => {
+    await purgeImages(q, "owner_id=$1 AND kind='kyc_id'", [req.user.id]); // replace any earlier upload
+    await saveImages(q, [req.file], { owner_id: req.user.id, kind: 'kyc_id' });
+    await logActivity(q, req.user.id, 'kyc_id_uploaded', 'Uploaded ID card photo');
+  });
+  res.status(201).json({ ok: true });
+});
+r.get('/kyc/id-card', requireAuth('farmer', 'investor', 'buyer'), (req, res) => sendIdCard(res, req.user.id));
+
 r.get('/kyc/me', requireAuth(), async (req, res) => {
   const k = await one(`SELECT dob::text AS dob, phone, address, state, lga, id_type, id_last4, bvn_last4, status, review_note FROM kyc WHERE user_id=$1`, [req.user.id]);
   const farms = req.user.role === 'farmer' ? await query(`SELECT ${FARM_COLS} FROM farms WHERE user_id=$1 ORDER BY id`, [req.user.id]) : [];
-  res.json({ ...(k || { status: 'none' }), farms });
+  const has_id_image = Boolean(await one("SELECT 1 FROM images WHERE owner_id=$1 AND kind='kyc_id' LIMIT 1", [req.user.id]));
+  res.json({ ...(k || { status: 'none' }), farms, has_id_image });
 });
 
 // BVN and ID number are stored encrypted; only the last 4 digits are kept in plain form for display.
@@ -53,6 +68,7 @@ r.put('/kyc', requireAuth('farmer', 'investor', 'buyer'), async (req, res) => {
   if (idNum && !/^[A-Za-z0-9-]{5,25}$/.test(idNum)) throw new HttpError(400, 'Enter a valid ID number.');
   if (!bvn && !old) throw new HttpError(400, 'BVN is required.');
   if (!idNum && !old) throw new HttpError(400, 'ID number is required.');
+  if (!(await one("SELECT 1 FROM images WHERE owner_id=$1 AND kind='kyc_id' LIMIT 1", [uid]))) throw new HttpError(400, 'Upload a clear photo of your ID card.');
   const farms = req.user.role === 'farmer' ? cleanFarms(b.farms) : null;
   const bvnEnc = bvn ? encrypt(bvn) : old.bvn_enc, bvnLast = bvn ? bvn.slice(-4) : old.bvn_last4;
   const idEnc = idNum ? encrypt(idNum) : old.id_number_enc, idLast = idNum ? idNum.slice(-4) : old.id_last4;

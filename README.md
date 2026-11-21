@@ -17,7 +17,7 @@ farmer, investor, buyer (public sign-up) and admin. The first admin comes from A
 admins add other admins in Admin portal > Admins.
 
 ## KYC
-New accounts land on the dashboard with a bar at the top ("Proceed to complete your KYC to have full access") and the dashboard stays locked until KYC is submitted. Farmers must also list their farms (several are allowed) with the farm address and, if possible, GPS coordinates captured from the phone. Exact GPS is visible only to the farmer and admins. Farmers, investors and buyers must submit a KYC profile (including BVN) before they can order, list produce, invest,
+New accounts land on the dashboard with a bar at the top ("Proceed to complete your KYC to have full access") and the dashboard stays locked until KYC is submitted. Farmers must also list their farms (several are allowed) with the farm address and, if possible, GPS coordinates captured from the phone. Exact GPS is visible only to the farmer and admins. Everyone (farmers, investors and buyers) must also upload a photo of their ID card. ID cards are private: they are kept in the database (never in a public bucket), are never served by the public image route, and only the owner and admins can open them (admin views are logged). Farmers, investors and buyers must submit a KYC profile (including BVN) before they can order, list produce, invest,
 request assistance or book equipment. BVN and ID numbers are stored encrypted (KYC_ENCRYPTION_KEY). Admins review profiles
 in Admin > KYC. The BVN is only checked for format (11 digits); it is NOT checked against NIBSS. To verify BVNs
 automatically, connect a licensed provider (e.g. Paystack, Dojah, Youverify) and call it in routes/kyc.js.
@@ -34,6 +34,17 @@ Money transferred to it lands in their AgriConnect wallet automatically. Setup:
 Only bank transfers to a personal account number are credited; card payments and unknown accounts are ignored (and logged).
 Admins can correct or top up a wallet by hand in Admin > Wallets (every change needs a reason and is logged).
 Withdrawals from wallets are not built yet.
+
+## Withdrawals
+Buyers and investors can withdraw unspent wallet money to their bank account (smallest: ₦1,000). The money leaves the wallet at once; an admin sends it from
+Admin > Withdrawals and clicks **Mark paid**, or **Reject** (the money goes back to the wallet). The user can cancel a pending withdrawal. Money inside active
+investment plans is not in the wallet: it shows under My investments with a countdown, and returns to the wallet after payout. Money spent on produce leaves the
+wallet and the order is tracked (Placed > Confirmed > Delivered) on the buyer's dashboard and History. Withdrawals are paid by hand for now; Paystack Transfers could automate this later.
+
+## Dashboards
+Every role has its own dashboard: buyer (wallet, orders with delivery status), investor (wallet, plans with countdowns, wallet activity),
+farmer (orders to confirm/deliver, earnings and payouts, assistance, farms), admin (items needing attention with links to the right tab). The layout is
+wide on laptops and single-column on phones.
 
 ## Paying for produce
 Buyers choose **Pay now** (from the wallet; the money is held until delivery) or **Pay on delivery**, and **Delivery** or **Pickup**.

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { api, useMeta } from '../api.js';
+import { api, useMeta, shrink, openPrivateImage } from '../api.js';
 import PasswordInput from '../components/PasswordInput.jsx';
 
 const blankFarm = (state = '') => ({ name: '', address: '', state, lga: '', size_ha: '', main_crops: '', latitude: '', longitude: '' });
@@ -58,6 +58,8 @@ export default function Kyc({ user, onDone }) {
   const [f, setF] = useState({ dob: '', phone: '', address: '', state: user?.state || '', lga: '', id_type: '', id_number: '', bvn: '' });
   const [farms, setFarms] = useState([blankFarm(user?.state || '')]);
   const [msg, setMsg] = useState(null);
+  const [idFile, setIdFile] = useState(null);
+  const idUrl = useMemo(() => (idFile ? URL.createObjectURL(idFile) : null), [idFile]);
   useEffect(() => {
     if (!user || user.role === 'admin') return;
     api('/kyc/me').then((d) => {
@@ -77,6 +79,8 @@ export default function Kyc({ user, onDone }) {
     e.preventDefault(); setMsg(null);
     try {
       if (locked) { await api('/kyc/farms', { method: 'PUT', body: { farms } }); setMsg({ ok: 'Farms saved.' }); return; } // a verified profile can still add farms
+      if (!idFile && !k?.has_id_image) return setMsg({ err: 'Please upload a photo of your ID card.' });
+      if (idFile) { const fd = new FormData(); fd.append('image', idFile); await api('/kyc/id-card', { method: 'POST', body: fd }); }
       await api('/kyc', { method: 'PUT', body: { ...f, ...(isFarmer ? { farms } : {}) } });
       onDone('submitted'); nav('/dashboard');
     } catch (er) { setMsg({ err: er.message }); }
@@ -102,6 +106,15 @@ export default function Kyc({ user, onDone }) {
         <div className="row">
           <label className="grow">ID type<select value={f.id_type} onChange={set('id_type')} required><option value="">Choose…</option>{idTypes.map((t) => <option key={t}>{t}</option>)}</select></label>
           <div className="grow"><PasswordInput label={`ID number${has && k.id_last4 ? ` (saved: ends ${k.id_last4})` : ''}`} value={f.id_number} onChange={set('id_number')} required={!has} autoComplete="off" /></div>
+        </div>
+        <div className="idcard">
+          <b>Photo of your ID card</b>
+          <p className="muted small">A clear photo of the front of your {f.id_type || 'ID card'}. All four corners and the writing must be readable. Only you and our verification team can see it.</p>
+          <label className="photo-add">📷 {idFile || k?.has_id_image ? 'Change photo' : 'Choose or take a photo'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={async (e) => { const file = e.target.files[0]; if (file) setIdFile(await shrink(file)); e.target.value = ''; }} />
+          </label>
+          {idUrl && <img className="id-preview" src={idUrl} alt="Your ID card (preview)" />}
+          {k?.has_id_image && !idFile && <button type="button" className="ghost" onClick={() => openPrivateImage('/kyc/id-card')}>View my uploaded ID card ✔</button>}
         </div>
         <PasswordInput label={`BVN, 11 digits${has && k.bvn_last4 ? ` (saved: ends ${k.bvn_last4})` : ''}`} value={f.bvn} onChange={set('bvn')} required={!has} inputMode="numeric" maxLength={11} autoComplete="off" />
         <p className="muted">Your BVN and ID number are stored encrypted and are only shown to our verification team. {has && 'Leave them blank to keep the saved ones.'}</p>

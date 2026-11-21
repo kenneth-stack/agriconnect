@@ -38,6 +38,10 @@ const avatarForm = () => { const f = new FormData(); f.append('image', new Blob(
 const KYC = { dob: '1990-05-10', phone: '08012345678', address: '12 Farm Road, Ikeja', state: 'Lagos', lga: 'Ikeja', id_type: 'NIN', id_number: 'A1234567890', bvn: '12345678901' };
 const days = (n) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const putKyc = async (u, body, withId = true) => { // every KYC submission needs an ID card photo first
+  if (withId) { const f = new FormData(); f.append('image', new Blob([PNG], { type: 'image/png' }), 'id.png'); await call('/kyc/id-card', { method: 'POST', token: u.token, form: f }); }
+  return call('/kyc', { method: 'PUT', token: u.token, body });
+};
 const wallet = async (u) => (await call('/wallet', { token: u.token })).d;
 const order = (u, body) => call('/orders', { method: 'POST', token: u.token, body });
 const setStatus = (u, id, status) => call(`/orders/${id}/status`, { method: 'PATCH', token: u.token, body: { status } });
@@ -51,13 +55,13 @@ ok((await call('/auth/register', { method: 'POST', body: { name: 'a', email: 'a@
 const admin = (await call('/auth/login', { method: 'POST', body: { email: process.env.ADMIN_EMAIL, password: process.env.ADMIN_PASSWORD } })).d;
 ok(admin.user?.role === 'admin', 'admin login');
 ok((await call('/listings', { method: 'POST', token: farmer.token, form: photoForm({ title: 'Rice', category: 'Grains & Cereals', quantity: 100, unit: 'bag', price: 40000 }) })).s === 403, 'farmer blocked from listing until KYC is done');
-ok((await call('/kyc', { method: 'PUT', token: farmer.token, body: { ...KYC, bvn: '123' } })).s === 400, 'BVN must be 11 digits');
+ok((await putKyc(farmer, { ...KYC, bvn: '123' })).s === 400, 'BVN must be 11 digits');
 const FARMS = [{ name: 'Main farm', address: 'Km 5, Epe road', state: 'Lagos', lga: 'Epe', size_ha: 4, main_crops: 'Rice', latitude: 6.5833, longitude: 3.9833 }, { name: 'Second farm', address: 'Behind the market, Ikorodu', state: 'Lagos' }];
-ok((await call('/kyc', { method: 'PUT', token: farmer.token, body: KYC })).s === 400, 'farmer KYC needs at least one farm');
-ok((await call('/kyc', { method: 'PUT', token: farmer.token, body: { ...KYC, farms: [{ ...FARMS[0], latitude: 200 }] } })).s === 400, 'invalid GPS coordinates rejected');
-ok((await call('/kyc', { method: 'PUT', token: farmer.token, body: { ...KYC, farms: [{ ...FARMS[0], longitude: '' }] } })).s === 400, 'GPS needs both latitude and longitude');
-await call('/kyc', { method: 'PUT', token: farmer.token, body: { ...KYC, farms: FARMS } });
-for (const u of [buyer, inv]) await call('/kyc', { method: 'PUT', token: u.token, body: KYC });
+ok((await putKyc(farmer, KYC)).s === 400, 'farmer KYC needs at least one farm');
+ok((await putKyc(farmer, { ...KYC, farms: [{ ...FARMS[0], latitude: 200 }] })).s === 400, 'invalid GPS coordinates rejected');
+ok((await putKyc(farmer, { ...KYC, farms: [{ ...FARMS[0], longitude: '' }] })).s === 400, 'GPS needs both latitude and longitude');
+await putKyc(farmer, { ...KYC, farms: FARMS });
+for (const u of [buyer, inv]) await putKyc(u, KYC);
 const km = (await call('/kyc/me', { token: farmer.token })).d;
 ok(km.farms.length === 2 && km.farms[0].latitude === 6.5833 && km.address === KYC.address, 'farmer KYC saves house address and multiple farms with GPS');
 const pf = (await call(`/farmers/${farmer.user.id}`)).d;
@@ -121,7 +125,7 @@ const pay = (await call('/admin/payouts', { token: admin.token })).d;
 ok(pay.length === 1 && pay[0].amount === 400000 && pay[0].payout_status === 'pending', 'admin payout list shows the farmer is owed the item price');
 ok((await call(`/admin/payouts/${o1.d.id}`, { method: 'PATCH', token: admin.token, body: {} })).s === 200 && (await call(`/admin/payouts/${o1.d.id}`, { method: 'PATCH', token: admin.token, body: {} })).s === 400, 'admin marks payout sent (only once)');
 ok((await call('/profile/payout', { method: 'PUT', token: farmer.token, body: { bank_name: 'GTBank', account_number: '0123456789', account_name: 'Farmer Test' } })).s === 200 && (await call('/admin/payouts', { token: admin.token })).d[0].account_number === '0123456789', 'farmer payout account is shown to admin');
-ok((await call('/profile/payout', { method: 'PUT', token: buyer.token, body: { bank_name: 'X', account_number: '0123456789', account_name: 'X' } })).s === 403, 'only farmers set a payout account');
+ok((await call('/profile/payout', { method: 'PUT', token: buyer.token, body: { bank_name: 'X', account_number: '0123456789', account_name: 'X' } })).s === 200 && (await call('/profile/payout', { method: 'PUT', token: admin.token, body: { bank_name: 'X', account_number: '0123456789', account_name: 'X' } })).s === 403, 'farmers, buyers and investors can save a bank account; admins cannot');
 ok((await setStatus(farmer, o3.d.id, 'confirmed')).s === 200 && (await setStatus(farmer, o3.d.id, 'completed')).s === 200 && (await call('/me/history', { token: buyer.token })).d.orders.find((o) => o.id === o3.d.id).payment_status === 'collected', 'pay-on-delivery order completes as collected');
 ok((await call('/admin/fees', { method: 'PUT', token: buyer.token, body: { same: 1, other: 2 } })).s === 403, 'only admins change delivery fees');
 ok((await call('/admin/fees', { method: 'PUT', token: admin.token, body: { same: 3000, other: 9000 } })).s === 200 && (await call('/meta')).d.deliveryFees.other === 9000, 'admin changes delivery fees');
@@ -192,10 +196,52 @@ ok((await call('/auth/reset', { method: 'POST', body: { token: tok, password: 'n
 const ov = (await call('/admin/overview', { token: admin.token })).d;
 ok(ov.invested === 400000 && ov.traded === 402500 + 40000, 'admin overview totals');
 
+/* ---- ID card (private) ---- */
+const raw = (path, token) => fetch(B + path, { headers: token ? { Authorization: 'Bearer ' + token } : {} });
+const fresh = (await reg('buyer', { email: `idtest${stamp}@t.com` })).d;
+const noId = await putKyc(fresh, KYC, false);
+ok(noId.s === 400 && /ID card/.test(noId.d.error), 'KYC cannot be submitted without an ID card photo');
+const fake = new FormData(); fake.append('image', new Blob(['not an image'], { type: 'image/png' }), 'x.png');
+ok((await call('/kyc/id-card', { method: 'POST', token: fresh.token, form: fake })).s === 400, 'a fake ID card file is rejected');
+ok((await putKyc(fresh, KYC)).s === 200 && (await call('/kyc/me', { token: fresh.token })).d.has_id_image === true, 'KYC works once the ID card photo is uploaded');
+const own = await raw('/kyc/id-card', fresh.token);
+ok(own.status === 200 && own.headers.get('content-type') === 'image/png' && own.headers.get('cache-control').includes('no-store'), 'owner can view their own ID card (never cached)');
+ok((await raw('/kyc/id-card')).status === 401, 'ID card is not available without logging in');
+ok((await raw(`/admin/kyc/${fresh.user.id}/id-card`, buyer.token)).status === 403, 'other users cannot view an ID card');
+ok((await raw(`/admin/kyc/${fresh.user.id}/id-card`, admin.token)).status === 200, 'admin can view the ID card in the KYC review');
+
+/* ---- withdrawals ---- */
+const wd = (await reg('buyer', { email: `wd${stamp}@t.com` })).d;
+await putKyc(wd, KYC);
+await call('/admin/wallet/credit', { method: 'POST', token: admin.token, body: { user_id: wd.user.id, amount: 20000, note: 'test' } });
+const BANK = { bank_name: 'Test Bank', account_number: '0123456789', account_name: 'Wd Test' };
+const wdPost = (body, u = wd) => call('/withdrawals', { method: 'POST', token: u.token, body });
+ok((await wdPost({ amount: 500, ...BANK })).s === 400, 'withdrawal below the minimum is refused');
+ok((await wdPost({ amount: 5000, ...BANK, account_number: '123' })).s === 400, 'withdrawal needs a valid 10-digit bank account');
+ok((await wdPost({ amount: 999999, ...BANK })).s === 400 && (await wallet(wd)).balance === 20000, 'withdrawing more than the balance is refused and nothing is taken');
+ok((await wdPost({ amount: 5000, ...BANK }, farmer)).s === 403, 'farmers are paid through payouts, not withdrawals');
+const w1 = await wdPost({ amount: 5000, ...BANK });
+ok(w1.s === 201 && (await wallet(wd)).balance === 15000, 'a withdrawal takes the money out of the wallet at once');
+ok((await call('/withdrawals', { token: wd.token })).d.items[0].status === 'pending', 'the withdrawal is listed as pending');
+ok((await call(`/withdrawals/${w1.d.id}/cancel`, { method: 'POST', token: wd.token })).s === 200 && (await wallet(wd)).balance === 20000, 'cancelling a pending withdrawal returns the money');
+ok((await call(`/withdrawals/${w1.d.id}/cancel`, { method: 'POST', token: wd.token })).s === 400, 'a withdrawal cannot be cancelled twice');
+const w2 = await wdPost({ amount: 6000, ...BANK });
+ok((await call(`/admin/withdrawals/${w2.d.id}`, { method: 'PATCH', token: wd.token, body: { action: 'paid' } })).s === 403, 'only admins process withdrawals');
+ok((await call('/admin/withdrawals', { token: admin.token })).d.find((x) => x.id === w2.d.id)?.account_number === '0123456789', 'admin sees the bank details to pay');
+ok((await call('/admin/overview', { token: admin.token })).d.pending_withdrawals >= 1, 'admin overview counts pending withdrawals');
+ok((await call(`/admin/users/${wd.user.id}`, { method: 'DELETE', token: admin.token })).s === 400, 'an account with a waiting withdrawal cannot be deleted');
+ok((await call(`/admin/withdrawals/${w2.d.id}`, { method: 'PATCH', token: admin.token, body: { action: 'reject', note: 'Name mismatch' } })).s === 200 && (await wallet(wd)).balance === 20000, 'rejecting returns the money to the wallet');
+const w3 = await wdPost({ amount: 7000, ...BANK });
+ok((await call(`/admin/withdrawals/${w3.d.id}`, { method: 'PATCH', token: admin.token, body: { action: 'paid' } })).s === 200 && (await wallet(wd)).balance === 13000, 'marking it paid keeps the money out of the wallet');
+ok((await call(`/admin/withdrawals/${w3.d.id}`, { method: 'PATCH', token: admin.token, body: { action: 'paid' } })).s === 400, 'a withdrawal cannot be paid twice');
+ok((await call('/profile', { token: wd.token })).d.payout?.account_number === '0123456789', 'the bank account is remembered for next time');
+const ow = (await call('/admin/overview', { token: admin.token })).d;
+ok(['pending_kyc', 'pending_assistance', 'pending_withdrawals', 'pending_payouts', 'pending_bookings'].every((k) => typeof ow[k] === 'number'), 'admin overview has all the pending counts for the dashboard');
+
 /* ---- admin deletes an account ---- */
 const victimEmail = `victim${stamp}@t.com`;
 const victim = (await reg('buyer', { email: victimEmail })).d;
-await call('/kyc', { method: 'PUT', token: victim.token, body: KYC });
+await putKyc(victim, KYC);
 ok((await call(`/admin/users/${victim.user.id}`, { method: 'DELETE', token: buyer.token })).s === 403, 'only admins can delete accounts');
 ok((await call(`/admin/users/${inv.user.id}`, { method: 'DELETE', token: admin.token })).s === 400, 'cannot delete a user who still holds wallet money or an active investment');
 ok((await call(`/admin/users/${admin.user.id}`, { method: 'DELETE', token: admin.token })).s === 400, 'an admin cannot delete their own account');

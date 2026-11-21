@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { query, one, logActivity } from '../db.js';
 import { requireAuth } from '../auth.js';
-import { purgeImages } from '../upload.js';
+import { purgeImages, sendIdCard } from '../upload.js';
 import { HttpError } from '../http.js';
 import { decrypt } from '../secure.js';
 import { tx } from '../db.js';
@@ -21,7 +21,12 @@ r.get('/admin/overview', async (_q, res) => {
     one(`SELECT (SELECT COUNT(*)::int FROM listings WHERE status='available') AS listings,
                 (SELECT COUNT(*)::int FROM equipment WHERE active) AS equipment,
                 (SELECT COALESCE(SUM(amount),0)::float8 FROM plan_investments WHERE status IN ('active','paid')) AS invested,
-                (SELECT COALESCE(SUM(total),0)::float8 FROM orders WHERE status='completed') AS traded`)
+                (SELECT COALESCE(SUM(total),0)::float8 FROM orders WHERE status='completed') AS traded,
+                (SELECT COUNT(*)::int FROM kyc WHERE status='submitted') AS pending_kyc,
+                (SELECT COUNT(*)::int FROM assistance_requests WHERE status='pending') AS pending_assistance,
+                (SELECT COUNT(*)::int FROM withdrawals WHERE status='pending') AS pending_withdrawals,
+                (SELECT COUNT(*)::int FROM orders WHERE payout_status='pending') AS pending_payouts,
+                (SELECT COUNT(*)::int FROM bookings WHERE status='pending') AS pending_bookings`)
   ]);
   res.json({ users, orders, ...totals });
 });
@@ -104,6 +109,11 @@ r.get('/admin/kyc/:userId/reveal', async (req, res) => {
   const farms = await query('SELECT name, address, state, lga, size_ha, main_crops, latitude, longitude FROM farms WHERE user_id=$1 ORDER BY id', [id]);
   await logActivity(query, req.user.id, 'viewed_kyc', `Viewed full KYC details of user #${id}`);
   res.json({ bvn: decrypt(k.bvn_enc), id_number: decrypt(k.id_number_enc), address: k.address, phone: k.phone, farms });
+});
+
+r.get('/admin/kyc/:userId/id-card', async (req, res) => {
+  await logActivity(query, req.user.id, 'viewed_kyc', `Viewed the ID card of user #${Number(req.params.userId) || 0}`);
+  await sendIdCard(res, Number(req.params.userId) || 0);
 });
 
 r.patch('/admin/kyc/:userId', async (req, res) => {
@@ -225,7 +235,9 @@ r.delete('/admin/users/:id', async (req, res) => {
   if (bal > 0.009) throw new HttpError(400, `This user still has ₦${bal.toLocaleString('en-NG')} in their wallet. Settle it first (Wallets).`);
   const open = await one(`SELECT (SELECT COUNT(*)::int FROM orders WHERE (buyer_id=$1 OR farmer_id=$1) AND status IN ('pending','confirmed')) AS orders,
     (SELECT COUNT(*)::int FROM orders WHERE farmer_id=$1 AND payout_status='pending') AS payouts,
-    (SELECT COUNT(*)::int FROM plan_investments WHERE investor_id=$1 AND status IN ('pending','active')) AS investments`, [id]);
+    (SELECT COUNT(*)::int FROM plan_investments WHERE investor_id=$1 AND status IN ('pending','active')) AS investments,
+    (SELECT COUNT(*)::int FROM withdrawals WHERE user_id=$1 AND status='pending') AS withdrawals`, [id]);
+  if (open.withdrawals) throw new HttpError(400, 'This user has a withdrawal waiting to be paid. Process it first (Withdrawals).');
   if (open.orders || open.investments) throw new HttpError(400, 'This user has open orders or active investments. Finish or cancel them first.');
   if (open.payouts) throw new HttpError(400, 'This farmer is still owed a payout. Pay it first (Payouts).');
   await tx(async (q) => {
@@ -234,6 +246,26 @@ r.delete('/admin/users/:id', async (req, res) => {
     await q("UPDATE listings SET status='removed' WHERE seller_id=$1", [id]);
     await q("UPDATE users SET name='Deleted user', email=$1, password_hash='!', phone=NULL, state=NULL, deleted_at=now() WHERE id=$2", [`deleted-${id}@deleted.invalid`, id]);
     await logActivity(q, req.user.id, 'deleted_user', `Deleted the account of ${u.name} (${u.email})`);
+  });
+  res.json({ ok: true });
+});
+
+/* Withdrawals: buyers and investors taking unspent wallet money back to their bank */
+r.get('/admin/withdrawals', async (_q, res) =>
+  res.json(await query(`SELECT w.id, w.amount, w.bank_name, w.account_number, w.account_name, w.status, w.admin_note, w.created_at, w.processed_at, u.name, u.role, u.phone
+    FROM withdrawals w JOIN users u ON u.id = w.user_id ORDER BY (w.status = 'pending') DESC, w.id DESC LIMIT 300`)));
+
+// paid: you sent the money to their bank yourself. reject: the money goes back into their wallet.
+r.patch('/admin/withdrawals/:id', async (req, res) => {
+  const { action, note } = req.body;
+  if (!['paid', 'reject'].includes(action)) throw new HttpError(400, 'Choose paid or reject.');
+  await tx(async (q) => {
+    const [w] = await q("SELECT * FROM withdrawals WHERE id=$1 AND status='pending' FOR UPDATE", [Number(req.params.id) || 0]);
+    if (!w) throw new HttpError(400, 'This withdrawal was already processed, or does not exist.');
+    if (action === 'reject') await moveMoney(q, w.user_id, w.amount, 'withdrawal_refund', `Withdrawal #${w.id} rejected${note ? ': ' + note : ''}`, `wd-refund:${w.id}`);
+    await q('UPDATE withdrawals SET status=$1, admin_note=$2, processed_at=now() WHERE id=$3', [action === 'paid' ? 'paid' : 'rejected', note || null, w.id]);
+    await logActivity(q, w.user_id, action === 'paid' ? 'withdrawal_paid' : 'withdrawal_rejected',
+      action === 'paid' ? `Your withdrawal of ₦${w.amount.toLocaleString('en-NG')} was sent to ${w.bank_name} ${w.account_number}` : `Your withdrawal of ₦${w.amount.toLocaleString('en-NG')} was rejected and returned to your wallet${note ? ': ' + note : ''}`);
   });
   res.json({ ok: true });
 });

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, naira } from '../api.js';
 
-export const TX_LABEL = { transfer_in: 'Money added', order_payment: 'Order payment', refund: 'Refund', investment: 'Investment', investment_payout: 'Investment payout', admin_credit: 'Credit from AgriConnect' };
+export const TX_LABEL = { transfer_in: 'Money added', order_payment: 'Order payment', refund: 'Refund', investment: 'Investment', investment_payout: 'Investment payout', admin_credit: 'Credit from AgriConnect', withdrawal: 'Withdrawal', withdrawal_refund: 'Withdrawal returned' };
 
 // The wallet balance and the person's own bank account number (investors and buyers)
 export function WalletCard({ w, reload, compact }) {
@@ -30,6 +30,7 @@ export function WalletCard({ w, reload, compact }) {
           {msg && <small role="alert">{msg}</small>}
         </div>
       ) : <div className="acct"><span>Account numbers are being set up. Please check back soon.</span></div>}
+      {compact && <div className="wallet-actions"><Link to="/wallet">＋ Add money</Link><Link to="/wallet#withdraw">↗ Withdraw</Link></div>}
       <p className="wallet-hint">{compact ? <Link to="/wallet">Open wallet →</Link> : 'Transfer any amount from any bank app to your account number. It shows in your wallet once the bank confirms it, usually within a few minutes.'}</p>
     </section>
   );

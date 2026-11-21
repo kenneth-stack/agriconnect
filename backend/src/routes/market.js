@@ -64,8 +64,8 @@ r.get('/farmers/:id', async (req, res) => {
 });
 
 r.get('/images/:id', async (req, res) => {
-  const row = await one('SELECT content_type, data, storage_key FROM images WHERE id=$1', [Number(req.params.id) || 0]);
-  if (!row) throw new HttpError(404, 'Not found.');
+  const row = await one('SELECT content_type, data, storage_key, kind FROM images WHERE id=$1', [Number(req.params.id) || 0]);
+  if (!row || row.kind === 'kyc_id') throw new HttpError(404, 'Not found.'); // ID cards are private
   res.set('Cache-Control', 'public, max-age=86400');
   if (row.storage_key) {
     const url = publicUrl(row.storage_key);

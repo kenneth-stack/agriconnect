@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api, naira, when } from '../api.js';
 import { monthsLabel } from '../components/Plans.jsx';
+import { orderLabel } from '../components/orders.jsx';
 
 export default function History({ user }) {
   const [h, setH] = useState(null);
@@ -28,7 +29,7 @@ export default function History({ user }) {
       <div className="tabs" role="tablist">{tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'tab on' : 'tab'} onClick={() => setTab(k)}>{l}</button>)}</div>
       <div className="table-wrap">
         {tab === 'trades' && <><Empty n={h.orders.length} /><table><tbody>{h.orders.map((o) => (
-          <tr key={o.id}><td>{when(o.created_at)}</td><td>{o.side === 'buying' ? `Bought from ${o.farmer}` : `Sold to ${o.buyer}`}</td><td>{o.quantity} {o.unit} {o.title}</td><td>{naira(o.total)}<br /><span className="muted small">{o.delivery_fee > 0 ? `incl. ${naira(o.delivery_fee)} delivery` : o.fulfilment === 'pickup' ? 'pickup' : ''}</span></td><td><Badge s={o.status} /><br /><span className="muted small">{PAY[o.payment_status]}</span></td></tr>))}</tbody></table></>}
+          <tr key={o.id}><td>{when(o.created_at)}</td><td>{o.side === 'buying' ? `Bought from ${o.farmer}` : `Sold to ${o.buyer}`}</td><td>{o.quantity} {o.unit} {o.title}</td><td>{naira(o.total)}<br /><span className="muted small">{o.delivery_fee > 0 ? `incl. ${naira(o.delivery_fee)} delivery` : o.fulfilment === 'pickup' ? 'pickup' : ''}</span></td><td><Badge s={o.status} /><br /><span className="small">{orderLabel(o)}</span><br /><span className="muted small">{PAY[o.payment_status]}</span></td></tr>))}</tbody></table></>}
         {tab === 'investments' && <><Empty n={h.investments.length} /><table><tbody>{h.investments.map((i) => (
           <tr key={i.id}><td>{when(i.created_at)}</td><td>{monthsLabel(i.duration_months)} at {i.rate_percent}%</td><td>{naira(i.amount)}</td><td>{i.maturity_date ? `Matures ${when(i.maturity_date)}` : 'Not started'}</td><td><Badge s={i.display_status} /></td></tr>))}</tbody></table></>}
         {tab === 'assistance' && <><Empty n={h.assistance.length} /><table><tbody>{h.assistance.map((a) => (

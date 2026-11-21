@@ -103,6 +103,13 @@ CREATE TABLE IF NOT EXISTS farms (
   id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id), name TEXT, address TEXT NOT NULL, state TEXT NOT NULL, lga TEXT,
   size_ha DOUBLE PRECISION, main_crops TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, created_at TIMESTAMPTZ DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS withdrawals (
+  id SERIAL PRIMARY KEY, user_id INT NOT NULL REFERENCES users(id), amount DOUBLE PRECISION NOT NULL,
+  bank_name TEXT NOT NULL, account_number TEXT NOT NULL, account_name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','paid','rejected','cancelled')),
+  admin_note TEXT, created_at TIMESTAMPTZ DEFAULT now(), processed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS withdrawals_user ON withdrawals(user_id);
 ALTER TABLE images ALTER COLUMN data DROP NOT NULL;
 ALTER TABLE images ADD COLUMN IF NOT EXISTS storage_key TEXT;
 `;

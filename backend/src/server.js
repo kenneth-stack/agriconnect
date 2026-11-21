@@ -18,6 +18,7 @@ import assistance from './routes/assistance.js';
 import plans, { ensurePlans } from './routes/plans.js';
 import wallet from './routes/wallet.js';
 import profile from './routes/profile.js';
+import withdrawals from './routes/withdrawals.js';
 import { ensureSettings } from './settings.js';
 
 if (!process.env.JWT_SECRET) throw new Error('Set JWT_SECRET in backend/.env');
@@ -30,7 +31,7 @@ app.use(cors({ origin: (process.env.CLIENT_ORIGIN || 'http://localhost:5173').sp
 app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } })); // raw body is needed to check Paystack's signature
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60 * 1000, limit: 40 }));
 app.use('/api/ai', rateLimit({ windowMs: 60 * 1000, limit: 15 }));
-app.use('/api', auth, market, trade, equipment, me, admin, ai, kyc, assistance, plans, wallet, profile);
+app.use('/api', auth, market, trade, equipment, me, admin, ai, kyc, assistance, plans, wallet, profile, withdrawals);
 app.get('/health', (_q, r) => r.json({ ok: true }));
 
 app.use((err, _req, res, _next) => {

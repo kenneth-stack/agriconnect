@@ -1,24 +1,26 @@
 import { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { api, img, naira, when, useMeta } from '../api.js';
+import { Navigate, useSearchParams } from 'react-router-dom';
+import { api, img, naira, when, useMeta, openPrivateImage } from '../api.js';
 import ListingForm from '../components/ListingForm.jsx';
 import PhotoPicker from '../components/PhotoPicker.jsx';
 import { monthsLabel } from '../components/Plans.jsx';
 
-const TABS = ['Overview', 'KYC', 'Assistance', 'Investments', 'Payouts', 'Wallets', 'Plans & fees', 'Upload produce', 'Farmers & users', 'Equipment', 'Bookings', 'Orders', 'Activity', 'Admins'];
+const TABS = ['Overview', 'KYC', 'Assistance', 'Investments', 'Payouts', 'Withdrawals', 'Wallets', 'Plans & fees', 'Upload produce', 'Farmers & users', 'Equipment', 'Bookings', 'Orders', 'Activity', 'Admins'];
 
 export default function Admin({ user }) {
-  const [tab, setTab] = useState('Overview');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(TABS.includes(params.get('tab')) ? params.get('tab') : 'Overview'); // dashboard links open the right tab
   if (user?.role !== 'admin') return <Navigate to="/" />;
   return (
     <>
       <h2>Admin portal</h2>
       <div className="tabs" role="tablist">{TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'tab on' : 'tab'} onClick={() => setTab(t)}>{t}</button>)}</div>
-      {tab === 'Overview' && <Overview />}
+      {tab === 'Overview' && <Overview go={setTab} />}
       {tab === 'KYC' && <KycAdmin />}
       {tab === 'Assistance' && <AssistanceAdmin />}
       {tab === 'Investments' && <InvestmentsAdmin />}
       {tab === 'Payouts' && <PayoutsAdmin />}
+      {tab === 'Withdrawals' && <WithdrawalsAdmin />}
       {tab === 'Wallets' && <WalletsAdmin />}
       {tab === 'Plans & fees' && <><PlansAdmin /><FeesAdmin /></>}
       {tab === 'Upload produce' && <Produce />}
@@ -40,16 +42,23 @@ function useLoad(path) {
 }
 const Msg = ({ m }) => m && <p className={m.err ? 'error' : 'ok'} role="status">{m.err || m.ok}</p>;
 
-function Overview() {
+function Overview({ go }) {
   const [o] = useLoad('/admin/overview');
   if (!o) return <p className="muted">Loading…</p>;
   const n = (arr, k, v) => arr.find((x) => x[k] === v)?.n || 0;
-  const stat = (l, v) => <div className="card stat"><b>{v}</b><span>{l}</span></div>;
-  return <div className="grid stats">
-    {stat('Farmers', n(o.users, 'role', 'farmer'))}{stat('Investors', n(o.users, 'role', 'investor'))}{stat('Buyers', n(o.users, 'role', 'buyer'))}
-    {stat('Produce listings', o.listings)}{stat('Equipment for hire', o.equipment)}
-    {stat('Pending orders', n(o.orders, 'status', 'pending'))}{stat('Completed trade value', naira(o.traded))}{stat('Total invested', naira(o.invested))}
-  </div>;
+  const stat = (l, v, tab) => { const body = <><b>{v}</b><span>{l}</span></>; return tab ? <button className="card stat link" onClick={() => go(tab)}>{body}</button> : <div className="card stat">{body}</div>; };
+  return <>
+    <h3>Needs your attention</h3>
+    <div className="grid stats">
+      {stat('KYC to review', o.pending_kyc, 'KYC')}{stat('Assistance requests', o.pending_assistance, 'Assistance')}{stat('Withdrawals to pay', o.pending_withdrawals, 'Withdrawals')}
+      {stat('Farmer payouts due', o.pending_payouts, 'Payouts')}{stat('Equipment bookings', o.pending_bookings, 'Bookings')}{stat('New orders', n(o.orders, 'status', 'pending'), 'Orders')}
+    </div>
+    <h3>The platform</h3>
+    <div className="grid stats">
+      {stat('Farmers', n(o.users, 'role', 'farmer'))}{stat('Investors', n(o.users, 'role', 'investor'))}{stat('Buyers', n(o.users, 'role', 'buyer'))}
+      {stat('Produce listings', o.listings)}{stat('Equipment for hire', o.equipment)}{stat('Completed trade value', naira(o.traded))}{stat('Invested in plans', naira(o.invested))}
+    </div>
+  </>;
 }
 
 function Produce() {
@@ -220,7 +229,7 @@ function KycAdmin() {
   return <div className="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>State</th><th>ID</th><th>BVN</th><th>Status</th><th></th></tr></thead><tbody>{list?.map((k) => (
     <tr key={k.user_id}><td>{k.name}<br /><span className="muted">{k.email}</span></td><td>{k.role}</td><td>{k.state}</td><td>{k.id_type} ••••{k.id_last4}</td><td>••••••{k.bvn_last4}</td>
       <td><span className={'badge ' + k.status}>{k.status}</span>{k.review_note && <><br /><span className="muted">{k.review_note}</span></>}</td>
-      <td className="row"><button className="ghost" onClick={() => reveal(k.user_id)}>View full</button>
+      <td className="row"><button className="ghost" onClick={() => reveal(k.user_id)}>View full</button><button className="ghost" onClick={() => openPrivateImage(`/admin/kyc/${k.user_id}/id-card`)}>View ID card</button>
         {k.status !== 'verified' && <button className="btn" onClick={() => review(k.user_id, 'verified')}>Verify</button>}
         {k.status !== 'rejected' && <button className="ghost" onClick={() => review(k.user_id, 'rejected')}>Reject</button>}</td></tr>))}</tbody></table>
     {list && !list.length && <p className="muted">No KYC profiles yet.</p>}</div>;
@@ -343,4 +352,22 @@ function FeesAdmin() {
       <button className="btn">Save fees</button><Msg m={m} />
     </form>
   );
+}
+
+function WithdrawalsAdmin() {
+  const [list, reload] = useLoad('/admin/withdrawals');
+  const act = async (id, action) => {
+    let note = null;
+    if (action === 'reject') { note = window.prompt('Reason for rejecting (the person will see this):'); if (note === null) return; }
+    else if (!window.confirm('Confirm that you have sent this money to their bank account?')) return;
+    try { await api(`/admin/withdrawals/${id}`, { method: 'PATCH', body: { action, note } }); reload(); } catch (e) { window.alert(e.message); }
+  };
+  return <>
+    <p className="muted">Send the money to the bank account shown, then click <b>Mark paid</b>. If you reject, the money goes straight back into their wallet.</p>
+    <div className="table-wrap"><table><thead><tr><th>Person</th><th>Amount</th><th>Send to</th><th>Status</th><th></th></tr></thead><tbody>{list?.map((w) => (
+      <tr key={w.id}><td>{w.name}<br /><span className="muted small">{w.role} · {w.phone} · {when(w.created_at)}</span></td><td><b>{naira(w.amount)}</b></td>
+        <td>{w.bank_name}<br /><b>{w.account_number}</b><br /><span className="muted small">{w.account_name}</span></td>
+        <td><span className={'badge ' + w.status}>{w.status}</span>{w.admin_note && <><br /><span className="muted small">{w.admin_note}</span></>}</td>
+        <td className="row">{w.status === 'pending' && <><button className="btn" onClick={() => act(w.id, 'paid')}>Mark paid</button><button className="ghost" onClick={() => act(w.id, 'reject')}>Reject</button></>}</td></tr>))}</tbody></table>
+      {list && !list.length && <p className="muted">No withdrawals yet.</p>}</div></>;
 }

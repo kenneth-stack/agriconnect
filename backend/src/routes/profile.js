@@ -16,7 +16,7 @@ r.get('/profile', requireAuth(), async (req, res) => {
   res.json({
     ...u, avatar_id: avatar?.id || null, kyc: kyc || { status: 'none' },
     farms: farmer ? await query('SELECT id, name, address, state, lga, size_ha, main_crops, latitude, longitude FROM farms WHERE user_id=$1 ORDER BY id', [uid]) : [],
-    payout: farmer ? (await one('SELECT bank_name, account_number, account_name FROM payout_accounts WHERE user_id=$1', [uid])) || null : null
+    payout: u.role !== 'admin' ? (await one('SELECT bank_name, account_number, account_name FROM payout_accounts WHERE user_id=$1', [uid])) || null : null
   });
 });
 
@@ -48,7 +48,7 @@ r.delete('/profile/avatar', requireAuth(), async (req, res) => {
 });
 
 // Farmers say where AgriConnect should send their money after a prepaid order is delivered
-r.put('/profile/payout', requireAuth('farmer'), async (req, res) => {
+r.put('/profile/payout', requireAuth('farmer', 'investor', 'buyer'), async (req, res) => {
   const { bank_name, account_number, account_name } = req.body;
   if (!bank_name?.trim() || !account_name?.trim() || !/^\d{10}$/.test(account_number || '')) throw new HttpError(400, 'Enter the bank, a 10-digit account number and the account name.');
   await query(`INSERT INTO payout_accounts (user_id, bank_name, account_number, account_name) VALUES ($1,$2,$3,$4)
