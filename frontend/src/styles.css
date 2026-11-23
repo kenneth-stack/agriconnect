@@ -146,3 +146,13 @@ a.stat.link:hover, button.stat.link:hover { border-color: var(--leaf); box-shado
   td, th { padding: .5rem .55rem; font-size: .92rem; } .count b { font-size: 1.2rem; }
   .top { padding: .6rem .9rem; } .hero h1 { font-size: 2rem; }
 }
+
+/* ---------- wallet card: tidy button, message and links on the dark green card ---------- */
+.wallet .acct { display: flex; flex-direction: column; align-items: flex-start; gap: .45rem; }
+.wallet .acct-btn, .wallet .acct-row button { background: #fff; color: var(--leaf-dark); border: 0; border-radius: 999px; padding: .5rem 1.1rem; min-height: 40px; font: inherit; font-weight: 600; cursor: pointer; }
+.wallet .acct-btn:hover, .wallet .acct-row button:hover { background: var(--millet); color: var(--ink); }
+.wallet .acct [role="alert"] { display: block; color: #ffe3df; font-size: .92rem; line-height: 1.4; }
+.wallet a, .wallet .wallet-hint a { color: #fff; font-weight: 600; } .wallet a:hover { color: var(--millet); }
+.checks { list-style: none; padding: 0; margin: .6rem 0; display: grid; gap: .45rem; }
+.checks .pass { color: var(--leaf); } .checks .fail { color: #b3261e; font-weight: 600; }
+code { background: var(--sky); padding: .1rem .35rem; border-radius: 4px; word-break: break-all; }

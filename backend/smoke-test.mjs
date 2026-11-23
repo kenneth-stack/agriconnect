@@ -16,6 +16,9 @@ const mock = http.createServer((req, res) => {
     const j = b ? JSON.parse(b) : {}; res.setHeader('Content-Type', 'application/json');
     if (req.headers.authorization !== 'Bearer ' + SECRET) { res.statusCode = 401; return res.end('{"status":false,"message":"bad key"}'); }
     if (req.url === '/customer') { const code = 'CUS_' + ++seq; customers[code] = j; return res.end(JSON.stringify({ status: true, data: { customer_code: code, email: j.email } })); }
+    if (req.url.startsWith('/customer?')) return res.end(JSON.stringify({ status: true, data: [] }));
+    if (req.url === '/dedicated_account/available_providers') return res.end(JSON.stringify({ status: true, data: [{ provider_slug: 'test-bank' }] }));
+    if (req.url === '/dedicated_account' && globalThis.mockFail) { res.statusCode = 400; return res.end(JSON.stringify({ status: false, message: 'Dedicated NUBAN is not available for your business' })); }
     if (req.url === '/dedicated_account') return res.end(JSON.stringify({ status: true, data: { bank: { name: 'Test Bank', slug: j.preferred_bank }, account_name: 'AGRICONNECT/' + customers[j.customer]?.first_name, account_number: String(9000000000 + ++seq), assigned: true, currency: 'NGN' } }));
     res.statusCode = 404; res.end('{}');
   });
@@ -249,6 +252,31 @@ ok((await call(`/admin/users/${victim.user.id}`, { method: 'DELETE', token: admi
 ok((await call('/auth/login', { method: 'POST', body: { email: victimEmail, password: 'password123' } })).s === 401 && (await call('/me/history', { token: victim.token })).s === 401, 'a deleted account cannot log in and its old session stops working');
 ok(!(await call('/admin/users', { token: admin.token })).d.some((x) => x.id === victim.user.id), 'deleted account disappears from the users list');
 ok((await reg('buyer', { email: victimEmail })).s === 201, 'the email can be registered again');
+
+/* ---- deleting a farmer removes them everywhere ---- */
+const farmerCountBefore = (await call('/admin/overview', { token: admin.token })).d.users.find((x) => x.role === 'farmer').n;
+const gone = (await reg('farmer', { email: `gonefarmer${stamp}@t.com` })).d;
+await putKyc(gone, KYC && { ...KYC, farms: FARMS });
+ok((await call('/farmers')).d.some((x) => x.id === gone.user.id), 'a new farmer appears in the farmer list');
+ok((await call('/admin/overview', { token: admin.token })).d.users.find((x) => x.role === 'farmer').n === farmerCountBefore + 1, 'and is counted as a farmer');
+ok((await call(`/admin/users/${gone.user.id}`, { method: 'DELETE', token: admin.token })).s === 200, 'admin deletes the farmer');
+ok(!(await call('/farmers')).d.some((x) => x.id === gone.user.id && x.name), 'the deleted farmer is gone from the marketplace farmer list');
+ok((await call('/admin/overview', { token: admin.token })).d.users.find((x) => x.role === 'farmer').n === farmerCountBefore, 'the farmer count drops back');
+ok((await call(`/farmers/${gone.user.id}`)).s === 404, 'the deleted farmer has no public page');
+ok((await call('/listings', { method: 'POST', token: admin.token, form: photoForm({ farmer_id: gone.user.id, title: 'X', category: 'Fruits', quantity: 1, price: 1 }) })).s === 400, 'admin cannot upload produce for a deleted farmer');
+
+/* ---- Paystack check and clear errors ---- */
+const pc = (await call('/admin/paystack/check', { token: admin.token })).d;
+ok(pc.configured && pc.mode === 'test' && pc.bank === 'test-bank' && pc.steps.every((x) => x.ok) && /\/api\/paystack\/webhook$/.test(pc.webhook), 'Paystack check passes, picks test-bank for a test key and shows the webhook URL');
+ok((await call('/admin/paystack/check', { token: buyer.token })).s === 403, 'only admins can run the Paystack check');
+globalThis.mockFail = true;
+const nb = (await reg('buyer', { email: `nobank${stamp}@t.com` })).d;
+await putKyc(nb, KYC);
+const bad = await call('/wallet/account', { method: 'POST', token: nb.token });
+ok(bad.s === 502, 'when Paystack refuses, the user gets a friendly error');
+ok(/not available for your business/.test((await call('/admin/paystack/check', { token: admin.token })).d.lastError || ''), 'the admin check shows the real Paystack reason');
+globalThis.mockFail = false;
+ok((await call('/wallet/account', { method: 'POST', token: nb.token })).s === 200 && (await call('/admin/paystack/check', { token: admin.token })).d.lastError === null, 'retrying works once Paystack is fixed, and the old error clears');
 
 mock.close();
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0);

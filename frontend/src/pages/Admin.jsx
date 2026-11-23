@@ -21,7 +21,7 @@ export default function Admin({ user }) {
       {tab === 'Investments' && <InvestmentsAdmin />}
       {tab === 'Payouts' && <PayoutsAdmin />}
       {tab === 'Withdrawals' && <WithdrawalsAdmin />}
-      {tab === 'Wallets' && <WalletsAdmin />}
+      {tab === 'Wallets' && <><PaystackCheck /><WalletsAdmin /></>}
       {tab === 'Plans & fees' && <><PlansAdmin /><FeesAdmin /></>}
       {tab === 'Upload produce' && <Produce />}
       {tab === 'Farmers & users' && <Users />}
@@ -370,4 +370,24 @@ function WithdrawalsAdmin() {
         <td><span className={'badge ' + w.status}>{w.status}</span>{w.admin_note && <><br /><span className="muted small">{w.admin_note}</span></>}</td>
         <td className="row">{w.status === 'pending' && <><button className="btn" onClick={() => act(w.id, 'paid')}>Mark paid</button><button className="ghost" onClick={() => act(w.id, 'reject')}>Reject</button></>}</td></tr>))}</tbody></table>
       {list && !list.length && <p className="muted">No withdrawals yet.</p>}</div></>;
+}
+
+function PaystackCheck() {
+  const [r, setR] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  async function run() { setBusy(true); setErr(''); try { setR(await api('/admin/paystack/check')); } catch (e) { setErr(e.message); } setBusy(false); }
+  return (
+    <div className="card">
+      <h3>Paystack connection</h3>
+      <p className="muted">Checks that personal account numbers can be created, and shows the real reason when they cannot.</p>
+      <div><button className="btn" onClick={run} disabled={busy}>{busy ? 'Checking…' : 'Check Paystack connection'}</button></div>
+      {err && <p className="error" role="alert">{err}</p>}
+      {r && <>
+        <ul className="checks">{r.steps.map((s, i) => <li key={i} className={s.ok ? 'pass' : 'fail'}>{s.ok ? '✔' : '✖'} {s.text}</li>)}</ul>
+        {r.lastError && <p className="notice bad"><b>Last account-creation error</b><br />{r.lastError}</p>}
+        <p className="small"><b>Webhook URL to paste in Paystack</b> (Settings → API Keys &amp; Webhooks). Paystack has separate boxes for Test and Live, so fill the one that matches your key:<br /><code>{r.webhook}</code></p>
+      </>}
+    </div>
+  );
 }

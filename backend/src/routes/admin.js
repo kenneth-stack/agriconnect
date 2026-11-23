@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { query, one, logActivity } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { purgeImages, sendIdCard } from '../upload.js';
+import { diagnose } from '../paystack.js';
 import { HttpError } from '../http.js';
 import { decrypt } from '../secure.js';
 import { tx } from '../db.js';
@@ -16,7 +17,7 @@ r.use('/admin', requireAuth('admin'));
 
 r.get('/admin/overview', async (_q, res) => {
   const [users, orders, totals] = await Promise.all([
-    query('SELECT role, COUNT(*)::int AS n FROM users GROUP BY role'),
+    query('SELECT role, COUNT(*)::int AS n FROM users WHERE deleted_at IS NULL GROUP BY role'),
     query('SELECT status, COUNT(*)::int AS n FROM orders GROUP BY status'),
     one(`SELECT (SELECT COUNT(*)::int FROM listings WHERE status='available') AS listings,
                 (SELECT COUNT(*)::int FROM equipment WHERE active) AS equipment,
@@ -201,7 +202,7 @@ r.put('/admin/fees', async (req, res) => {
 r.post('/admin/wallet/credit', async (req, res) => {
   const amount = Number(req.body.amount);
   if (!(amount > 0)) throw new HttpError(400, 'Enter an amount above zero.');
-  const u = await one("SELECT id, name FROM users WHERE id=$1 AND role IN ('investor','buyer')", [Number(req.body.user_id) || 0]);
+  const u = await one("SELECT id, name FROM users WHERE id=$1 AND role IN ('investor','buyer') AND deleted_at IS NULL", [Number(req.body.user_id) || 0]);
   if (!u) throw new HttpError(404, 'Choose an investor or buyer.');
   await tx(async (q) => {
     await moveMoney(q, u.id, amount, 'admin_credit', req.body.note?.trim() || 'Credited by admin');
@@ -268,6 +269,13 @@ r.patch('/admin/withdrawals/:id', async (req, res) => {
       action === 'paid' ? `Your withdrawal of ₦${w.amount.toLocaleString('en-NG')} was sent to ${w.bank_name} ${w.account_number}` : `Your withdrawal of ₦${w.amount.toLocaleString('en-NG')} was rejected and returned to your wallet${note ? ': ' + note : ''}`);
   });
   res.json({ ok: true });
+});
+
+// Is Paystack set up properly? Shows the real reason when account numbers cannot be created.
+r.get('/admin/paystack/check', async (req, res) => {
+  const info = await diagnose();
+  const last = await one("SELECT value FROM settings WHERE key='paystack_last_error'");
+  res.json({ ...info, lastError: last?.value || null, webhook: `${req.protocol}://${req.get('host')}/api/paystack/webhook` });
 });
 
 export default r;

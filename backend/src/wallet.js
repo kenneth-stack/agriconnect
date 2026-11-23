@@ -23,7 +23,11 @@ export async function provisionAccount(userId) {
   const u = await one('SELECT u.name, u.email, k.phone FROM users u LEFT JOIN kyc k ON k.user_id = u.id WHERE u.id=$1', [userId]);
   let a;
   try { a = await createDedicatedAccount({ email: u.email, name: u.name, phone: u.phone }); }
-  catch (e) { console.error('Paystack account creation failed:', e.message); throw new HttpError(502, 'We could not create your account number right now. Please try again shortly.'); }
+  catch (e) {
+    console.error('Paystack account creation failed:', e.message);
+    await query("INSERT INTO settings (key, value) VALUES ('paystack_last_error', $1) ON CONFLICT (key) DO UPDATE SET value=$1", [`${new Date().toISOString()}  ${e.message}`]).catch(() => {});
+    throw new HttpError(502, 'We could not create your account number right now. Please try again shortly.'); }
+  await query("DELETE FROM settings WHERE key='paystack_last_error'").catch(() => {}); // it works now
   if (!a.account_number) throw new HttpError(502, 'Your account number is still being prepared. Please try again in a minute.');
   await query('INSERT INTO virtual_accounts (user_id, account_number, account_name, bank_name, paystack_customer_code) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (user_id) DO NOTHING',
     [userId, a.account_number, a.account_name, a.bank_name, a.code]);

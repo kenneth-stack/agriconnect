@@ -29,7 +29,7 @@ services:
         sync: false
       - key: PAYSTACK_SECRET_KEY     # your Paystack secret key: gives each investor and buyer a personal account number
         sync: false
-      - key: PAYSTACK_DVA_BANK       # test-bank with a TEST key; wema-bank or titan-paystack when live
+      - key: PAYSTACK_DVA_BANK       # ignored for test keys (they always use test-bank); wema-bank or titan-paystack when live
         value: wema-bank
       - key: KYC_ENCRYPTION_KEY      # encrypts BVN/ID numbers; generated once, never change it
         generateValue: true

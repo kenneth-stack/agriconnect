@@ -21,7 +21,7 @@ ORDER BY l.created_at DESC LIMIT 200`;
 
 async function targetFarmer(req) {
   const id = req.user.role === 'admin' ? Number(req.body.farmer_id) : req.user.id;
-  const f = await one("SELECT id, name FROM users WHERE id=$1 AND role='farmer'", [id || 0]);
+  const f = await one("SELECT id, name FROM users WHERE id=$1 AND role='farmer' AND deleted_at IS NULL", [id || 0]);
   if (!f) throw new HttpError(400, 'Choose a farmer.');
   return f;
 }
@@ -49,7 +49,7 @@ r.get('/farmers', async (req, res) => {
       (SELECT COUNT(*)::int FROM listings l WHERE l.seller_id = u.id AND l.status='available' AND l.quantity>0) AS listings,
       (SELECT id FROM images i WHERE i.owner_id = u.id AND i.kind='farmland' ORDER BY id LIMIT 1) AS photo_id
     FROM users u LEFT JOIN farmer_profiles p ON p.user_id = u.id
-    WHERE u.role='farmer' AND ($1::text IS NULL OR u.state = $1)
+    WHERE u.role='farmer' AND u.deleted_at IS NULL AND ($1::text IS NULL OR u.state = $1)
     ORDER BY listings DESC, u.name LIMIT 200`, [req.query.state || null]));
 });
 

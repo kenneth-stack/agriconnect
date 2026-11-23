@@ -28,9 +28,10 @@ Farmers request items (manure, seedlings, land, ...) with a quantity and descrip
 ## Wallets and account numbers (Paystack)
 Every investor and buyer gets a personal bank account number (a Paystack dedicated virtual account) once their KYC is in.
 Money transferred to it lands in their AgriConnect wallet automatically. Setup:
-1. Put your Paystack **secret key** in PAYSTACK_SECRET_KEY. With a test key set PAYSTACK_DVA_BANK=test-bank; live: wema-bank or titan-paystack.
-2. Ask Paystack to enable **Dedicated Accounts** on your business (they must approve it).
-3. In Paystack > Settings > API Keys & Webhooks, set the webhook URL to `https://YOUR-API.onrender.com/api/paystack/webhook`.
+1. Put your Paystack **secret key** (sk_test_... or sk_live_...) in PAYSTACK_SECRET_KEY. With a test key the app automatically uses Paystack's `test-bank`; with a live key it uses PAYSTACK_DVA_BANK (wema-bank or titan-paystack).
+2. For live use, ask Paystack to enable **Dedicated Accounts** on your business (they must approve it).
+3. In Paystack > Settings > API Keys & Webhooks, paste the webhook URL with the full path: `https://YOUR-API.onrender.com/api/paystack/webhook`. Paystack has separate Test and Live boxes: fill the one that matches your key.
+4. If a user sees "We could not create your account number", open **Admin > Wallets > Check Paystack connection**. It tells you in plain words what is wrong (wrong key, feature not enabled, wrong bank) and shows Paystack's last error.
 Only bank transfers to a personal account number are credited; card payments and unknown accounts are ignored (and logged).
 Admins can correct or top up a wallet by hand in Admin > Wallets (every change needs a reason and is logged).
 Withdrawals from wallets are not built yet.

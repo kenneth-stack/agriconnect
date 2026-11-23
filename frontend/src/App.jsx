@@ -90,7 +90,7 @@ export default function App() {
       </main>
       <footer className="foot">
         <strong>AgriConnect Africa</strong> · Connecting farmers to capital, technology and markets.
-        <br /><span className="muted">Contact: hello@your-domain.com · Lagos, Nigeria (replace with your details)</span>
+        <br /><span className="muted">Contact: hello@your-domain.com · Lagos, Nigeria</span>
       </footer>
     </div>
   );
