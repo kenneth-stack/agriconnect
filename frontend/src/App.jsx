@@ -11,6 +11,9 @@ import MyFarm from './pages/MyFarm.jsx';
 import Assistance from './pages/Assistance.jsx';
 import History from './pages/History.jsx';
 import Kyc from './pages/Kyc.jsx';
+import Wallet from './pages/Wallet.jsx';
+import Profile from './pages/Profile.jsx';
+import Avatar from './components/Avatar.jsx';
 import Admin from './pages/Admin.jsx';
 import Assistant from './pages/Assistant.jsx';
 import Login from './pages/Login.jsx';
@@ -38,7 +41,13 @@ export default function App() {
 
   // keep the KYC status fresh (an admin may have reviewed it since last login)
   useEffect(() => {
-    if (user && user.role !== 'admin') api('/kyc/me').then((k) => k.status !== user.kyc && setUser({ ...user, kyc: k.status })).catch(() => {});
+    if (!user) return;
+    api('/profile').then((p) => {
+      const patch = {};
+      if ((p.avatar_id ?? null) !== (user.avatar ?? null)) patch.avatar = p.avatar_id;
+      if (user.role !== 'admin' && p.kyc.status !== user.kyc) patch.kyc = p.kyc.status;
+      if (Object.keys(patch).length) setUser({ ...user, ...patch });
+    }).catch(() => {});
   }, []);
 
   const links = !user
@@ -48,7 +57,10 @@ export default function App() {
         ...(user.role === 'farmer' ? [['/my-farm', 'My farm'], ['/assistance', 'Assistance/Funding']] : []),
         ...(user.role === 'admin' ? [['/admin', 'Admin portal']] : []),
         ['/marketplace', 'Marketplace'], ['/investment', 'Invest'], ['/equipment', 'Equipment'],
-        ...(user.role !== 'admin' ? [['/history', 'History'], ['/kyc', 'KYC profile']] : []),
+        ...(['investor', 'buyer'].includes(user.role) ? [['/wallet', 'Wallet']] : []),
+        ...(user.role !== 'admin' ? [['/history', 'History']] : []),
+        ['/profile', 'My profile'],
+        ...(user.role !== 'admin' ? [['/kyc', 'KYC verification']] : []),
         ['/assistant', 'Ask the AI']
       ];
 
@@ -62,6 +74,7 @@ export default function App() {
         </nav>
         <div className={'actions' + (menu ? ' open' : '')}>
           <button className="ghost" onClick={toggleEasy} aria-pressed={easy}>{easy ? 'Smart mode' : 'Easy mode'}</button>
+          {user && <Link to="/profile" className="me" onClick={go} title="My profile"><Avatar id={user.avatar} name={user.name} size={36} /></Link>}
           {user ? <button className="ghost" onClick={logout}>Log out ({user.name.split(' ')[0]})</button>
                 : <NavLink className="btn" to="/login">Log in</NavLink>}
         </div>
@@ -80,6 +93,8 @@ export default function App() {
           <Route path="/my-farm" element={<Gate user={user}><MyFarm user={user} /></Gate>} />
           <Route path="/assistance" element={<Gate user={user}><Assistance user={user} /></Gate>} />
           <Route path="/history" element={<Gate user={user}><History user={user} /></Gate>} />
+          <Route path="/wallet" element={<Gate user={user}><Wallet user={user} /></Gate>} />
+          <Route path="/profile" element={<Profile user={user} onChange={setUser} />} />
           <Route path="/kyc" element={<Kyc user={user} onDone={(status) => setUser({ ...user, kyc: status })} />} />
           <Route path="/admin" element={<Admin user={user} />} />
           <Route path="/assistant" element={<Assistant user={user} />} />
@@ -90,7 +105,7 @@ export default function App() {
       </main>
       <footer className="foot">
         <strong>AgriConnect Africa</strong> · Connecting farmers to capital, technology and markets.
-        <br /><span className="muted">Contact: hello@your-domain.com · Lagos, Nigeria</span>
+        <br /><span className="muted">Contact: hello@your-domain.com · Lagos, Nigeria (replace with your details)</span>
       </footer>
     </div>
   );
