@@ -59,10 +59,17 @@ After maturity an admin pays out principal + return into the wallet (Admin > Inv
 Admin > Plans. Offering fixed returns to the public is regulated in Nigeria; get legal advice (SEC/CBN) first.
 
 ## Emails
-All email goes through one function, sendMail() in backend/src/mailer.js (Resend by default: RESEND_API_KEY + MAIL_FROM).
-Sent today: welcome email after sign-up, and password-reset links. If email is not set up yet, nothing breaks: registration
-still works and the skipped email is noted in the API log. To use another provider later, change only sendMail().
-Accounts created by an admin do not get an email (they receive their login details from the admin).
+Notifications are sent from **notification@agriconnect.com** (MAIL_FROM); replies go to **contact@agriconnect.com** (CONTACT_EMAIL).
+They are sent when someone: registers (welcome) · asks to reset a password · gets money in their wallet (bank transfer or admin credit) ·
+buys produce (receipt to the buyer, new-order alert to the farmer) · has their order confirmed (delivery started / ready for pickup) ·
+has it delivered or collected · has their KYC verified (or not approved, with the reason).
+The website's **Contact** page saves every message (Admin > Messages) and emails it to contact@agriconnect.com; replying goes straight to the visitor.
+
+Setup with Resend (resend.com; its free plan is enough to start; Render's free tier blocks normal SMTP, so an email API is used):
+1. Create a Resend account. 2. Domains > add **agriconnect.com** and add the DNS records it shows at your domain provider until it says Verified.
+3. API Keys > create a key. 4. On the Render API service set RESEND_API_KEY to it (MAIL_FROM and CONTACT_EMAIL are already in render.yaml).
+Email is optional: without RESEND_API_KEY nothing breaks. Emails are skipped (noted in the log) and contact messages are still saved in Admin > Messages.
+All sending goes through sendMail() in backend/src/mailer.js, the only place to change to use another provider.
 
 ## Forgot password
 Needs email to be set up (see Emails above). Without them, reset links are printed in the

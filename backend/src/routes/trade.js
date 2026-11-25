@@ -4,9 +4,19 @@ import { requireAuth, needKyc } from '../auth.js';
 import { HttpError } from '../http.js';
 import { STATES } from '../meta.js';
 import { moveMoney } from '../wallet.js';
+import { sendOrderEmail } from '../mailer.js';
 import { getFees, deliveryFee } from '../settings.js';
 
 const r = Router();
+// Emails about an order, after it is saved. Never blocks or fails the request.
+async function orderEmails(id, kind) {
+  try {
+    const o = await one(`SELECT o.id, o.quantity, o.items_total, o.delivery_fee, o.total, o.fulfilment, o.delivery_state, o.payment_method, l.title, l.unit,
+        b.name AS buyer_name, b.email AS buyer_email, f.name AS farmer_name, f.email AS farmer_email
+      FROM orders o JOIN listings l ON l.id = o.listing_id JOIN users b ON b.id = o.buyer_id JOIN users f ON f.id = o.farmer_id WHERE o.id=$1`, [id]);
+    if (o) await sendOrderEmail(o, kind);
+  } catch (e) { console.error('Order email failed:', e.message); }
+}
 const naira = (n) => '₦' + Number(n).toLocaleString('en-NG');
 
 // Pay now from the wallet (money is held until delivery) or pay on delivery. The delivery fee is added to the produce price.
@@ -33,6 +43,7 @@ r.post('/orders', requireAuth('farmer', 'buyer', 'investor'), needKyc, async (re
     await logActivity(q, l.seller_id, 'received_order', `New order for ${qty} ${l.unit} of ${l.title}`);
     return o;
   });
+  orderEmails(row.id, 'placed');
   res.status(201).json({ id: row.id, items_total: items, delivery_fee: fee, total });
 });
 
@@ -68,6 +79,7 @@ r.patch('/orders/:id/status', requireAuth(), async (req, res) => {
     await logActivity(q, o.buyer_id, `order_${next}`, `Order #${o.id} ${next}`);
     await logActivity(q, o.farmer_id, `order_${next}`, `Order #${o.id} ${next}`);
   });
+  if (['confirmed', 'completed'].includes(next)) orderEmails(Number(req.params.id), next); // delivery activated / delivered
   res.json({ ok: true });
 });
 

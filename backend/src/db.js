@@ -110,6 +110,10 @@ CREATE TABLE IF NOT EXISTS withdrawals (
   admin_note TEXT, created_at TIMESTAMPTZ DEFAULT now(), processed_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS withdrawals_user ON withdrawals(user_id);
+CREATE TABLE IF NOT EXISTS contact_messages (
+  id SERIAL PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL, subject TEXT NOT NULL, message TEXT NOT NULL,
+  emailed BOOLEAN NOT NULL DEFAULT false, created_at TIMESTAMPTZ DEFAULT now()
+);
 ALTER TABLE images ALTER COLUMN data DROP NOT NULL;
 ALTER TABLE images ADD COLUMN IF NOT EXISTS storage_key TEXT;
 `;

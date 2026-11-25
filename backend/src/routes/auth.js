@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { query, one, logActivity } from '../db.js';
 import { sign, requireAuth } from '../auth.js';
 import { HttpError } from '../http.js';
-import { sendMail, sendWelcome } from '../mailer.js';
+import { sendWelcome, sendPasswordReset } from '../mailer.js';
 import { getFees } from '../settings.js';
 import { paystackEnabled } from '../paystack.js';
 import { STATES, CATEGORIES, UNITS, EQUIPMENT_TYPES, ASSISTANCE_ITEMS, ASSISTANCE_UNITS, ID_TYPES } from '../meta.js';
@@ -68,8 +68,7 @@ r.post('/auth/forgot', async (req, res) => {
     await query("INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES ($1,$2, now() + interval '1 hour')", [u.id, sha(token)]);
     const base = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').split(',')[0].replace(/\/$/, '');
     const link = `${base}/reset-password?token=${token}`;
-    const sent = await sendMail(email, 'Reset your AgriConnect password',
-      `Hello ${u.name},\n\nUse this link within 1 hour to choose a new password:\n${link}\n\nIf you did not ask for this, ignore this email.`).catch(() => false);
+    const sent = await sendPasswordReset({ name: u.name, email, link }).catch(() => false);
     if (!sent) console.log('Email is not configured. Password reset link for', email, ':', link);
     if (process.env.EXPOSE_RESET_LINKS === 'true') out.debug_link = link; // tests only
   }

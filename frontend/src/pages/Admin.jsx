@@ -5,7 +5,7 @@ import ListingForm from '../components/ListingForm.jsx';
 import PhotoPicker from '../components/PhotoPicker.jsx';
 import { monthsLabel } from '../components/Plans.jsx';
 
-const TABS = ['Overview', 'KYC', 'Assistance', 'Investments', 'Payouts', 'Withdrawals', 'Wallets', 'Plans & fees', 'Upload produce', 'Farmers & users', 'Equipment', 'Bookings', 'Orders', 'Activity', 'Admins'];
+const TABS = ['Overview', 'KYC', 'Assistance', 'Investments', 'Payouts', 'Withdrawals', 'Wallets', 'Plans & fees', 'Upload produce', 'Farmers & users', 'Equipment', 'Bookings', 'Orders', 'Activity', 'Admins', 'Messages'];
 
 export default function Admin({ user }) {
   const [params] = useSearchParams();
@@ -30,6 +30,7 @@ export default function Admin({ user }) {
       {tab === 'Orders' && <Orders />}
       {tab === 'Activity' && <Activity />}
       {tab === 'Admins' && <Admins me={user} />}
+      {tab === 'Messages' && <MessagesAdmin />}
     </>
   );
 }
@@ -388,6 +389,23 @@ function PaystackCheck() {
         {r.lastError && <p className="notice bad"><b>Last account-creation error</b><br />{r.lastError}</p>}
         <p className="small"><b>Webhook URL to paste in Paystack</b> (Settings → API Keys &amp; Webhooks). Paystack has separate boxes for Test and Live, so fill the one that matches your key:<br /><code>{r.webhook}</code></p>
       </>}
+    </div>
+  );
+}
+
+function MessagesAdmin() {
+  const [list] = useLoad('/admin/messages');
+  return (
+    <div className="stack">
+      <p className="muted">Messages from the website's Contact page. Each one is also emailed to contact@agriconnect.com.</p>
+      {list?.map((m) => (
+        <article key={m.id} className="card">
+          <div className="order-top"><b>{m.subject}</b><span className="grow" /><span className="muted small">{when(m.created_at)}</span></div>
+          <p className="muted small">{m.name} · <a href={`mailto:${m.email}?subject=${encodeURIComponent('Re: ' + m.subject)}`}>{m.email}</a>{!m.emailed && ' · could not be emailed to your inbox (check the email settings)'}</p>
+          <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{m.message}</p>
+        </article>
+      ))}
+      {list && !list.length && <p className="muted">No messages yet.</p>}
     </div>
   );
 }

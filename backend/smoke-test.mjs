@@ -278,5 +278,20 @@ ok(/not available for your business/.test((await call('/admin/paystack/check', {
 globalThis.mockFail = false;
 ok((await call('/wallet/account', { method: 'POST', token: nb.token })).s === 200 && (await call('/admin/paystack/check', { token: admin.token })).d.lastError === null, 'retrying works once Paystack is fixed, and the old error clears');
 
+/* ---- contact form ---- */
+const CF = { name: 'Ada Visitor', email: 'ada@visitor.com', subject: 'Question about plans', message: 'How do I withdraw my money from the wallet?' };
+ok((await call('/contact', { method: 'POST', body: CF })).s === 200, 'the contact form accepts a message from a visitor');
+ok((await call('/contact', { method: 'POST', body: { ...CF, email: 'nope' } })).s === 400, 'the contact form needs a valid email to reply to');
+ok((await call('/contact', { method: 'POST', body: { ...CF, message: 'hi' } })).s === 400, 'the contact form needs a real message');
+ok((await call('/contact', { method: 'POST', body: { ...CF, subject: 'BOT', website: 'http://spam.example' } })).s === 200, 'bots that fill the hidden field get a fake OK');
+const inbox = (await call('/admin/messages', { token: admin.token })).d;
+ok(inbox.some((m) => m.email === 'ada@visitor.com' && m.subject === 'Question about plans') && !inbox.some((m) => m.subject === 'BOT'), 'admin sees real messages and not the bot one');
+ok((await call('/admin/messages', { token: buyer.token })).s === 403, 'only admins can read contact messages');
+
+/* ---- KYC review (also sends the person an email) ---- */
+ok((await call(`/admin/kyc/${fresh.user.id}`, { method: 'PATCH', token: admin.token, body: { status: 'verified' } })).s === 200 && (await call('/kyc/me', { token: fresh.token })).d.status === 'verified', 'admin verifies a KYC profile');
+ok((await call(`/admin/kyc/${wd.user.id}`, { method: 'PATCH', token: admin.token, body: { status: 'rejected', note: 'The ID photo is blurry' } })).s === 200 && (await call('/kyc/me', { token: wd.token })).d.review_note === 'The ID photo is blurry', 'admin rejects a KYC profile with a reason');
+ok((await call(`/admin/kyc/${fresh.user.id}`, { method: 'PATCH', token: buyer.token, body: { status: 'verified' } })).s === 403, 'only admins review KYC');
+
 mock.close();
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASSED'); process.exit(fails ? 1 : 0);

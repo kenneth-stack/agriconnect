@@ -13,6 +13,7 @@ import History from './pages/History.jsx';
 import Kyc from './pages/Kyc.jsx';
 import Wallet from './pages/Wallet.jsx';
 import Profile from './pages/Profile.jsx';
+import Contact from './pages/Contact.jsx';
 import Avatar from './components/Avatar.jsx';
 import Admin from './pages/Admin.jsx';
 import Assistant from './pages/Assistant.jsx';
@@ -94,6 +95,7 @@ export default function App() {
           <Route path="/assistance" element={<Gate user={user}><Assistance user={user} /></Gate>} />
           <Route path="/history" element={<Gate user={user}><History user={user} /></Gate>} />
           <Route path="/wallet" element={<Gate user={user}><Wallet user={user} /></Gate>} />
+          <Route path="/contact" element={<Contact user={user} />} />
           <Route path="/profile" element={<Profile user={user} onChange={setUser} />} />
           <Route path="/kyc" element={<Kyc user={user} onDone={(status) => setUser({ ...user, kyc: status })} />} />
           <Route path="/admin" element={<Admin user={user} />} />
@@ -105,7 +107,7 @@ export default function App() {
       </main>
       <footer className="foot">
         <strong>AgriConnect Africa</strong> · Connecting farmers to capital, technology and markets.
-        <br /><span className="muted">Contact: contact@agriconnect.com · Lagos, Nigeria</span>
+        <br /><span className="muted"><Link to="/contact">Contact us</Link> · <a href="mailto:contact@agriconnect.com">contact@agriconnect.com</a> · Nigeria</span>
       </footer>
     </div>
   );

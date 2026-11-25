@@ -3,6 +3,7 @@ import { query, one, tx, logActivity } from '../db.js';
 import { requireAuth, needKyc } from '../auth.js';
 import { paystackEnabled, verifySignature } from '../paystack.js';
 import { moveMoney, provisionAccount } from '../wallet.js';
+import { sendWalletFunded } from '../mailer.js';
 
 const r = Router();
 
@@ -28,10 +29,15 @@ r.post('/paystack/webhook', async (req, res) => {
     if (!w) console.log('Paystack payment with no matching account (check Paystack dashboard):', data.reference, data.amount / 100);
     else {
       const amount = data.amount / 100;
+      let balance = null;
       await tx(async (q) => {
         const m = await moveMoney(q, w.user_id, amount, 'transfer_in', 'Bank transfer received', `ps:${data.reference}`);
-        if (!m.duplicate) await logActivity(q, w.user_id, 'wallet_funded', `Wallet funded with ₦${amount.toLocaleString('en-NG')}`);
+        if (!m.duplicate) { balance = m.balance; await logActivity(q, w.user_id, 'wallet_funded', `Wallet funded with ₦${amount.toLocaleString('en-NG')}`); }
       });
+      if (balance !== null) { // email only the first time this transfer is seen
+        const u = await one('SELECT name, email FROM users WHERE id=$1', [w.user_id]);
+        sendWalletFunded({ ...u, amount, balance, byTransfer: true }).catch(() => {});
+      }
     }
   }
   res.sendStatus(200);

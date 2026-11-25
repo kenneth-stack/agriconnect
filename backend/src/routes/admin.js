@@ -4,6 +4,7 @@ import { query, one, logActivity } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { purgeImages, sendIdCard } from '../upload.js';
 import { diagnose } from '../paystack.js';
+import { sendWalletFunded, sendKycResult } from '../mailer.js';
 import { HttpError } from '../http.js';
 import { decrypt } from '../secure.js';
 import { tx } from '../db.js';
@@ -123,6 +124,8 @@ r.patch('/admin/kyc/:userId', async (req, res) => {
   const k = await one('UPDATE kyc SET status=$1, review_note=$2, reviewed_at=now() WHERE user_id=$3 RETURNING user_id', [status, note || null, Number(req.params.userId) || 0]);
   if (!k) throw new HttpError(404, 'No KYC profile.');
   await logActivity(query, k.user_id, `kyc_${status}`, status === 'verified' ? 'KYC profile verified' : `KYC profile rejected${note ? ': ' + note : ''}`);
+  const person = await one('SELECT name, email FROM users WHERE id=$1', [k.user_id]);
+  sendKycResult({ ...person, status, note }).catch(() => {});
   res.json({ ok: true });
 });
 
@@ -202,13 +205,15 @@ r.put('/admin/fees', async (req, res) => {
 r.post('/admin/wallet/credit', async (req, res) => {
   const amount = Number(req.body.amount);
   if (!(amount > 0)) throw new HttpError(400, 'Enter an amount above zero.');
-  const u = await one("SELECT id, name FROM users WHERE id=$1 AND role IN ('investor','buyer') AND deleted_at IS NULL", [Number(req.body.user_id) || 0]);
+  const u = await one("SELECT id, name, email FROM users WHERE id=$1 AND role IN ('investor','buyer') AND deleted_at IS NULL", [Number(req.body.user_id) || 0]);
   if (!u) throw new HttpError(404, 'Choose an investor or buyer.');
+  let balance = 0;
   await tx(async (q) => {
-    await moveMoney(q, u.id, amount, 'admin_credit', req.body.note?.trim() || 'Credited by admin');
+    balance = (await moveMoney(q, u.id, amount, 'admin_credit', req.body.note?.trim() || 'Credited by admin')).balance;
     await logActivity(q, u.id, 'wallet_credit', `Wallet credited with ₦${amount.toLocaleString('en-NG')} by AgriConnect`);
     await logActivity(q, req.user.id, 'wallet_credit_given', `Credited ₦${amount.toLocaleString('en-NG')} to ${u.name}`);
   });
+  sendWalletFunded({ name: u.name, email: u.email, amount, balance, byTransfer: false }).catch(() => {});
   res.json({ ok: true });
 });
 r.get('/admin/wallet/transactions', async (_q, res) =>
@@ -277,5 +282,9 @@ r.get('/admin/paystack/check', async (req, res) => {
   const last = await one("SELECT value FROM settings WHERE key='paystack_last_error'");
   res.json({ ...info, lastError: last?.value || null, webhook: `${req.protocol}://${req.get('host')}/api/paystack/webhook` });
 });
+
+/* Messages from the website's contact form (also emailed to contact@agriconnect.com) */
+r.get('/admin/messages', async (_q, res) =>
+  res.json(await query('SELECT id, name, email, subject, message, emailed, created_at FROM contact_messages ORDER BY id DESC LIMIT 300')));
 
 export default r;

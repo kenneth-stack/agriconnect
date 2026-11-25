@@ -35,8 +35,10 @@ services:
         generateValue: true
       - key: RESEND_API_KEY          # optional: sends forgot-password emails (resend.com)
         sync: false
-      - key: MAIL_FROM               # e.g. AgriConnect <noreply@your-domain.com>
-        sync: false
+      - key: MAIL_FROM               # must be on a domain you verified in Resend
+        value: "AgriConnect <notification@agriconnect.com>"
+      - key: CONTACT_EMAIL           # where the website's contact form is delivered; also the reply-to of every notification
+        value: contact@agriconnect.com
       - key: R2_ACCOUNT_ID           # Cloudflare R2 photo storage (all optional; empty = photos kept in Postgres)
         sync: false
       - key: R2_ACCESS_KEY_ID
